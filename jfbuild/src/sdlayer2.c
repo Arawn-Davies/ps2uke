@@ -912,6 +912,15 @@ int setvideomode(int xdim, int ydim, int bitspp, int fullsc)
 #if USE_OPENGL
 		if (glunavailable) {
 #endif
+#if defined(_EE) || defined(__PS2__)
+			// PS2: gsKit owns the GS and does the T8 + CLUT hardware present
+			// (indexed->RGB + 320x200->640x448 upscale on the GS). SDL2's PS2
+			// port only calls gsKit_init_global from its renderer, so we skip
+			// SDL_CreateRenderer entirely -- no SDL texture, no per-frame CPU
+			// 8->32 expand, no 256 KB RGBA upload -- and bring up our own gsKit.
+			{ extern void ps2gs_init(int, int); ps2gs_init(xdim, ydim); }
+			(void) usesdlrenderer;
+#else
 			if (usesdlrenderer) {
 				// 8-bit software with no GL shader blitting goes via the SDL rendering apparatus.
 				SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
@@ -942,6 +951,7 @@ int setvideomode(int xdim, int ydim, int bitspp, int fullsc)
 					return -1;
 				}
 			}
+#endif
 #if USE_OPENGL
 		} else {
 			// Prepare the GLSL shader for 8-bit blitting.
@@ -1063,6 +1073,12 @@ const char *getdisplayname(int display)
 //
 void showframe(void)
 {
+#if defined(_EE) || defined(__PS2__)
+	// PS2: hand the 8-bit frame straight to the GS as a T8 texture + CLUT.
+	extern void ps2gs_present(const void *, int);
+	ps2gs_present(frame, bytesperline);
+	return;
+#endif
 #if USE_OPENGL
 	if (!glunavailable) {
 		if (bpp == 8) {

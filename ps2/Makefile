@@ -29,8 +29,8 @@ MACT_SRC = animlib control file_lib keyboard mathutil mouse scriplib util_lib
 # Audio: silent (driver_nosound) for now; no vorbis/flac (HAVE_* off).
 AUD_SRC  = asssys cd drivers fx_man midi mix mixst multivoc music pitch \
            driver_nosound
-# Our PS2 glue: cdfs/GRP file shim, build stubs, DualShock input.
-PLAT_SRC = ps2_fileio ps2_stubs ps2_pad
+# Our PS2 glue: cdfs/GRP file shim, build stubs, DualShock input, gsKit present.
+PLAT_SRC = ps2_fileio ps2_stubs ps2_pad ps2_gs
 
 EE_OBJS = $(addprefix $(OBJDIR)/jfb_,  $(addsuffix .o,$(JFB_SRC)))  \
           $(addprefix $(OBJDIR)/game_, $(addsuffix .o,$(GAME_SRC))) \
@@ -40,7 +40,8 @@ EE_OBJS = $(addprefix $(OBJDIR)/jfb_,  $(addsuffix .o,$(JFB_SRC)))  \
 
 EE_CFLAGS  += -std=gnu99 -D_EE -DUSE_POLYMOST=0 -DUSE_OPENGL=0 -fno-strict-aliasing
 EE_INCS    += -I$(GAME) -I$(JFBINC) -I$(MACT) -I$(AUDINC) -I$(PLAT) \
-              -I$(PS2SDK)/ports/include/SDL2 -I$(PS2SDK)/ports/include
+              -I$(PS2SDK)/ports/include/SDL2 -I$(PS2SDK)/ports/include \
+              -I$(GSKIT)/include
 EE_LDFLAGS += -L$(PS2SDK)/ports/lib -L$(GSKIT)/lib
 
 # SDL2 (+ main = PS2 entry/IOP init) over gsKit; ps2_drivers loads cdfs.irx.
@@ -55,6 +56,14 @@ all: $(EE_BIN)
 # IOP reset + sbv_patch_enable_lmb, needed for cdfs.irx) becomes the real main().
 $(OBJDIR)/jfb_sdlayer2.o: $(JFB)/sdlayer2.c | $(OBJDIR)
 	$(EE_C_COMPILE) -Dmain=SDL_main -c $< -o $@
+
+# Hot software-renderer TUs at -O3 + loop unrolling (the trailing -O3 overrides the
+# default -O2). a-c.c = the BUILD rasterizer inner loops (vline/hline/mvline);
+# engine.c = drawrooms + the scan setup. Perf experiment; reversible.
+$(OBJDIR)/jfb_a-c.o:    $(JFB)/a-c.c    | $(OBJDIR)
+	$(EE_C_COMPILE) -O3 -funroll-loops -c $< -o $@
+$(OBJDIR)/jfb_engine.o: $(JFB)/engine.c | $(OBJDIR)
+	$(EE_C_COMPILE) -O3 -funroll-loops -c $< -o $@
 
 $(OBJDIR)/jfb_%.o:  $(JFB)/%.c  | $(OBJDIR)
 	$(EE_C_COMPILE) -c $< -o $@
