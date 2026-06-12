@@ -10,6 +10,10 @@
 #ifdef PLATFORM_PS2
 
 #include <stdio.h>
+#include <sifrpc.h>
+#include <iopcontrol.h>
+#include <sbv_patches.h>
+#include <ps2_cdfs_driver.h>
 #include "platform.h"
 #include "build.h"
 #include "display.h"
@@ -20,6 +24,18 @@ void _platform_init(int argc, char **argv, const char *title, const char *icon)
     (void) title; (void) icon;
     _argc = argc;
     _argv = argv;
+
+    /* Reset the IOP + enable load-module-from-buffer so ps2_drivers can install
+       the embedded cdfs.irx (the GRP is read off the disc as cdfs:/DUKE3D.GRP).
+       Normally SDL2main does this; we don't link SDL. */
+    SifInitRpc(0);
+    while (!SifIopReset("", 0)) { }
+    while (!SifIopSync()) { }
+    SifInitRpc(0);
+    sbv_patch_enable_lmb();
+    sbv_patch_disable_prefix_check();
+    printf("cdfs: init_cdfs_driver() = %d\n", (int) init_cdfs_driver());
+
     ps2pad_init();
 }
 

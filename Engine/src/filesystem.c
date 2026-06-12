@@ -14,6 +14,16 @@
 #include "../../Game/src/global.h"
 #include <strings.h>
 
+#ifdef PLATFORM_PS2
+/* Route disc I/O through the fio/cdfs shim (after the system includes so
+   <fcntl.h>'s open() isn't macro-mangled). Bare names resolve to cdfs:/. */
+#include "ps2_fileio.h"
+#define open(p, ...)   ps2_bopen((p), __VA_ARGS__)
+#define read(f, b, l)  ps2_bread((f), (b), (l))
+#define lseek(f, o, w) ps2_blseek((f), (o), (w))
+#define close(f)       ps2_bclose((f))
+#endif
+
 char game_dir[512];
 
 //The multiplayer module in game.dll needs direct access to the crc32 (sic).
