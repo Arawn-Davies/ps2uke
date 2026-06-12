@@ -14,15 +14,20 @@ const char *build_version = "ps2uke";
 const char *build_date = __DATE__;
 const char *build_time = __TIME__;
 
-/* Override libps2_drivers' init_joystick_driver(), which the driver auto-init
-   calls before main(). Its mtapInit() spins forever on the mtapman IOP module
-   (never loaded under PCSX2) -> the boot hangs before our code runs. We don't
-   use ps2_drivers for input, so make it a no-op. (Same override trick ps2oom
-   uses for init_audio_driver.) Signature must match ps2_joystick_driver.h. */
+/* Override libps2_drivers' init_joystick_driver(): its mtapInit() spins forever
+   on the mtapman IOP module (a deadlock under PCSX2). We don't need the
+   multitap, so load just the pad modules (SIO2MAN/PADMAN) here -- enough for
+   SDL2's PS2 joystick backend to padInit/padRead the controller -- and skip
+   mtap entirely. (Same override trick ps2oom uses for init_audio_driver.) */
 #include <stdbool.h>
+#include <loadfile.h>     /* SifLoadModule */
+
 int init_joystick_driver(bool init_dependencies)
 {
     (void) init_dependencies;
+    /* Harmless if already loaded (SifLoadModule just errors). */
+    SifLoadModule("rom0:SIO2MAN", 0, NULL);
+    SifLoadModule("rom0:PADMAN", 0, NULL);
     return 0;   /* JOYSTICK_INIT_STATUS_OK */
 }
 void deinit_joystick_driver(bool deinit_dependencies)
