@@ -19,15 +19,16 @@
 #include "display.h"
 #include "ps2_pad.h"
 
-void _platform_init(int argc, char **argv, const char *title, const char *icon)
+/* Must run before ANY file access (the game loads the GRP very early in main(),
+   before _platform_init). Resets the IOP + enables load-module-from-buffer so
+   ps2_drivers can install the embedded cdfs.irx (GRP = cdfs:/DUKE3D.GRP).
+   Normally SDL2main does this; we don't link SDL. Called first thing in main(). */
+void ps2_early_init(void)
 {
-    (void) title; (void) icon;
-    _argc = argc;
-    _argv = argv;
+    static int done = 0;
+    if (done) return;
+    done = 1;
 
-    /* Reset the IOP + enable load-module-from-buffer so ps2_drivers can install
-       the embedded cdfs.irx (the GRP is read off the disc as cdfs:/DUKE3D.GRP).
-       Normally SDL2main does this; we don't link SDL. */
     SifInitRpc(0);
     while (!SifIopReset("", 0)) { }
     while (!SifIopSync()) { }
@@ -35,8 +36,15 @@ void _platform_init(int argc, char **argv, const char *title, const char *icon)
     sbv_patch_enable_lmb();
     sbv_patch_disable_prefix_check();
     printf("cdfs: init_cdfs_driver() = %d\n", (int) init_cdfs_driver());
-
     ps2pad_init();
+}
+
+void _platform_init(int argc, char **argv, const char *title, const char *icon)
+{
+    (void) title; (void) icon;
+    ps2_early_init();          /* idempotent; also called at the top of main() */
+    _argc = argc;
+    _argv = argv;
 }
 
 void _idle(void) {}

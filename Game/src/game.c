@@ -8122,6 +8122,11 @@ static int load_duke3d_groupfile(void)
 
 int main(int argc,char  **argv)
 {
+#ifdef PLATFORM_PS2
+    /* Bring up IOP + cdfs before the GRP load below (which happens before the
+       normal _platform_init). */
+    { extern void ps2_early_init(void); ps2_early_init(); }
+#endif
     int32_t i, j;
 	int32_t filehandle;
 
