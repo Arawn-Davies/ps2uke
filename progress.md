@@ -1,5 +1,33 @@
 # Progress log
 
+## 2026-06-12 (cont.) — BASE SWITCH to Chocolate Duke3D; whole tree compiles (`3180e29`)
+
+Switched the project base from the icculus repo to **Chocolate Duke3D**
+(fabiensanglard) -- because the icculus tree kept us reconstructing missing
+pieces (no engine, then no game `main()`). This time I verified completeness
+FIRST: Chocolate has `main()` (Game/src/game.c), the full Engine + Game +
+audiolib, and it compiles on ps2dev. (Upstream being archived is irrelevant --
+we vendor it into ps2uke; the STM32/RISC forks prove it ports to far weaker HW.)
+
+`e99ae2b` vendored Chocolate's Engine/ + Game/ at the repo root and removed the
+old icculus source/. Our PS2 platform code is preserved under ps2/platform/
+(ps2_driver, ps2_fileio, ps2_pad, ps2_compat) to rewire onto Chocolate's seam.
+
+`3180e29` -- **the entire Chocolate engine + game compiles for PS2 (27/27)** with
+small header-level edits (see commit). Key one: `int32`/`uint32` -> stdint, since
+on the EE n32 ABI `int32_t` is `long` not `int`, and the original
+`typedef int int32` collided with the engine's `int32_t` everywhere. SDL is
+confined to display.c (-> our ps2_driver), the dummy mp/audio backends ship in
+the tree, and a tiny sdl_stub/SDL.h no-ops the few window/cursor calls.
+
+### Next: link + wire the platform, then run
+1. Adapt our ps2_driver.c to Chocolate's display.c seam (frameplace + palette);
+   point filesystem.c at cdfs; control.c at the pad; dummy audio.
+2. ps2/Makefile for the Chocolate tree (engine + game + dummy_multi + driver),
+   link to an ELF.
+3. Reach Duke's real init/menu via game.c's main() -- the thing the icculus base
+   never had. Iterate in PCSX2.
+
 ## 2026-06-12 (cont.) — Stage 8a: Duke game logic compiles for PS2 (`2d9c30b`)
 
 15/17 Duke game TUs compile on the ps2dev toolchain (incl. `menues.c`, the
