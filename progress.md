@@ -1,5 +1,30 @@
 # Progress log
 
+## 2026-06-12 (cont.) — Stage 6: real Duke ART on screen — TITLE logo (`005d8bd`)
+
+The Duke3D TITLE tile (2486) renders full-screen in PCSX2 in the real palette --
+the "DUKE NUKEM 3D" logo. The ART/tile pipeline works end-to-end.
+
+`ps2_main.c` follows Ken's TEST.C order: `initengine` -> `loadpics("tiles000.art")`
+-> `setgamemode(0,320,200)` -> loop `clearview`/`rotatesprite(TITLE)`/`nextpage`.
+Console confirms `loadpics(...)=0` (catalog read from the GRP) and palette LOADED.
+
+`_setgamemode` now also sets the engine render globals `rotatesprite` needs
+(`xdim/ydim`, `ylookup[]`, `horizycent`, aspect invalidation, `setvlinebpl`,
+`setview`, `clearallviews`) -- mirroring sdl_driver's `go_to_new_vid_mode`.
+
+Stages 0-6 done + hardware-verified: cross-compile -> cdfs/GRP -> palette ->
+gsKit display -> real Duke artwork.
+
+Note: the per-ART-file "CAN NOT FOUND" log spam (~2 s startup) is the engine
+probing for loose files before the GRP fallback; harmless, optimisable later by
+not prepending `cdfs:/` for in-GRP lookups.
+
+### Next: the game, and input
+- PS2 pad -> BUILD input (the keyboard/mouse events the menu/game read).
+- Start wiring the Duke game objects (`source/*.c`): the real menu + game loop
+  (`drawrooms` for the 3D world), replacing this standalone test harness.
+
 ## 2026-06-12 (cont.) — WORKING on PCSX2: real Duke palette on screen (`54b7c74`)
 
 End-to-end verified in PCSX2: colour bars render in Duke's **real palette**,
