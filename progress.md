@@ -1,5 +1,36 @@
 # Progress log
 
+## 2026-06-12 (cont.) — BUILD engine compiles + links for PS2 (stages 1–3)
+
+Verified against the real ps2dev toolchain (gcc 15.2.0) in Docker.
+
+- **Stage 1 — compat layer** (`678b11a`): `PLATFORM_PS2` branch in `platform.h`
+  + `ps2_compat.h` (DOSism shims, little-endian, `Uint8/16/32`, timer 120Hz, no
+  SDL).
+- **Stage 2/3 — build + driver** (`f51c3ca`): `source/buildengine/ps2_driver.c`
+  (PS2 platform layer: owns the 8-bit `screen` framebuffer + globals, implements
+  `setvmode`/`_setgamemode`/`VBE_setPalette`/`_nextpage`/`drawpixel`/`drawline16`/
+  mouse/timer/`filelength`/`stricmp`), `ps2/Makefile` (ps2dev `Makefile.eeglobal`),
+  and `ps2/ps2_main.c` smoke-test.
+
+**Milestone reached:** `engine.c + a.c + pragmas.c + cache1d.c + ps2_driver.c`
+compile clean and **link into a valid ELF32 MIPS executable** (`ps2uke.elf`,
+~2.2 MB). `engine.c` compiled `-DPLATFORM_PS2` with zero changes — the portability
+work was all in the compat header + driver. Presentation/palette/pad in the
+driver are correct-but-stubbed (no gsKit yet), so the ELF links and boots through
+init but doesn't display — that's stage 4.
+
+How to reproduce: `./build.sh` from repo root (or `make` in `ps2/` inside the
+image). CI (`ps2.yml`) now builds `ps2/` for real.
+
+### Next: stage 4 — first light
+- Flesh out `ps2_driver.c` with gsKit: allocate a GS framebuffer + CLUT, and make
+  `_nextpage()` palette-expand `screen` → GS texture and vsync-flip; upload the
+  palette in `VBE_setPalette`. Needs `-lgraph -ldraw -ldma -lpacket` etc. in
+  `EE_LIBS`. First visible target = palette/title screen with real ART data.
+- Then PS2 pad → BUILD input (`readmousexy`/key events), GRP filesystem in
+  `cache1d`, and begin wiring the Duke game objects (`source/*.c`, stage 5+).
+
 ## 2026-06-12 — Foundation laid
 
 ### Where the repo stands
