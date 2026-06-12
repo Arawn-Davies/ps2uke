@@ -1,5 +1,32 @@
 # Progress log
 
+## 2026-06-12 (cont.) — WORKING on PCSX2: real Duke palette on screen (`54b7c74`)
+
+End-to-end verified in PCSX2: colour bars render in Duke's **real palette**,
+loaded from `PALETTE.DAT` inside `DUKE3D.GRP` off the disc via cdfs. The whole
+stack is live: `cdfs.irx` -> fio shim -> `cache1d`/GRP -> `initengine`/
+`loadpalette` -> gsKit T8 + CT32 CLUT -> display.
+
+The first gsKit attempt was black on hardware; the working present path mirrors
+ps2oom's proven PSMT8 backend:
+- explicit video mode (`Mode=NTSC`, `Interlace`/`Field`, `Width/Height`, `PSMZ`)
+  instead of auto-detect;
+- `dmaKit_init(..., 1 << DMA_CHANNEL_GIF)` (the GIF channel mask, not `0`);
+- `gsKit_TexManager` (init/invalidate/bind/nextFrame), not manual
+  `vram_alloc`/`texture_upload`;
+- a **128-byte-aligned** `memalign` upload buffer that `screen` is `memcpy`'d
+  into each frame (GS DMA needs aligned source; `malloc`'d `screen` wasn't);
+- per-frame CT32 CLUT rebuild from the live palette with the CSM1 swizzle.
+
+Also fixed the cdfs bring-up: `init_cdfs_driver()` needs an IOP reset + SBV
+patches first (`SifInitRpc`/`SifIopReset`/`sbv_patch_enable_lmb`), the work
+SDL2main does for ps2oom -- added as `ps2_iop_init()` before any driver init.
+
+### Next: real Duke pixels, then the game loop
+The palette proves the data path. Next, draw an actual ART tile (`loadpics` +
+`rotatesprite`, e.g. the title/loading screen) for real Duke graphics, then
+start wiring the Duke game objects (`source/*.c`) + PS2 pad input.
+
 ## 2026-06-12 (cont.) — Stage 5: cdfs/GRP filesystem (`47a6d48`)
 
 Real Duke data now loads off the boot disc. `cache1d.c`'s POSIX `open/read/lseek/
