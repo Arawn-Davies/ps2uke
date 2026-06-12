@@ -9,6 +9,6 @@
 # repo and runs `make` in ps2/.
 FROM ghcr.io/ps2dev/ps2dev:latest
 
-RUN apk add --no-cache make bash
+RUN apk add --no-cache make bash xorriso
 
 WORKDIR /work/ps2

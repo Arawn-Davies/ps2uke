@@ -24,3 +24,6 @@ build/
 *.RTS
 *.dmo
 *.DMO
+
+# ISO staging/output (contains copyrighted GRP) -- never commit
+/dist/

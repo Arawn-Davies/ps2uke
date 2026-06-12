@@ -23,6 +23,16 @@
 #include "physfs.h"
 #endif
 
+#ifdef PLATFORM_PS2
+/* Route this file's POSIX disc I/O through the fio/cdfs shim. Placed AFTER the
+   system includes above so <fcntl.h>'s open() declaration isn't macro-mangled. */
+#include "ps2_fileio.h"
+#define open(p, ...)   ps2_bopen((p), __VA_ARGS__)
+#define read(f, b, l)  ps2_bread((f), (b), (l))
+#define lseek(f, o, w) ps2_blseek((f), (o), (w))
+#define close(f)       ps2_bclose((f))
+#endif
+
 /*
  *   This module keeps track of a standard linear cacheing system.
  *   To use this module, here's all you need to do:

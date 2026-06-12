@@ -1,50 +1,41 @@
 /*
- * ps2uke stage-4 framebuffer test.
+ * ps2uke stage-5 test: read the real Duke data off the disc via cdfs.
  *
- * Brings up the PS2 video path WITHOUT any Duke data: it drives ps2_driver.c
- * directly (no engine.initengine / no PALETTE.DAT / no ART), fills the engine's
- * 8-bit `screen` buffer with a colour-bar + gradient test pattern, installs a
- * synthetic 256-entry palette, and presents it through gsKit every frame.
+ * Brings up cdfs, opens DUKE3D.GRP on the boot disc, inits the BUILD engine
+ * (which loads PALETTE.DAT out of the GRP), then renders the colour-bar test
+ * pattern through the engine's REAL palette. If the disc/GRP path works you see
+ * the bars in Duke's actual colours -- visual proof the whole file stack
+ * (cdfs.irx -> fio shim -> cache1d -> GRP -> PALETTE.DAT) is live.
  *
- * If the pipeline (EE 8-bit buffer -> CT32 CLUT -> GS T8 texture -> display)
- * works, you see vertical colour bars over a vertical brightness gradient.
- *
- * The engine entry points are still referenced (below) so the whole BUILD
- * engine continues to link; the Duke game loop is wired in a later stage.
+ * The Duke game loop itself is wired in a later stage; see PORTING.md.
  */
 
 #include <stdio.h>
 
-/* Driver-owned globals + entry points (see buildengine/display.h). */
+#include <ps2_cdfs_driver.h>   /* init_cdfs_driver() (libps2_drivers) */
+
+/* Driver + engine entry points (buildengine/display.h, cache1d.c, engine.c). */
 extern char *screen;
 extern long  xres, yres, bytesperline;
+extern char  palette[768];                 /* engine's live palette (R,G,B 0..63) */
+
 extern int   _setgamemode(char davidoption, long daxdim, long daydim);
 extern int   VBE_setPalette(long start, long num, char *palettebuffer);
 extern void  _nextpage(void);
 
-/* Keep the engine in the link (proves it still builds); not executed. */
-extern int  initengine(void);
-extern void uninitengine(void);
-static void *engine_link_anchor[] = {
-    (void *) initengine, (void *) uninitengine
-};
+extern int   initengine(void);
+extern long  initgroupfile(const char *filename);
 
-static void make_test_palette(void)
+static void apply_engine_palette(void)
 {
-    /* 256 entries, BUILD palette format: B,G,R,pad, channels 0..63.
-       Build a 16x16 hue/!value ramp so every index is a distinct colour. */
+    /* BUILD palette is R,G,B (0..63). VBE_setPalette wants B,G,R,pad per entry. */
     unsigned char pal[256 * 4];
     int i;
     for (i = 0; i < 256; i++)
     {
-        int hi = i >> 4;            /* 0..15 -> colour family */
-        int lo = i & 15;            /* 0..15 -> brightness    */
-        int r = (hi & 4) ? (lo * 4) : (hi * 4);
-        int g = (hi & 2) ? (lo * 4) : (lo * 2);
-        int b = (hi & 1) ? (lo * 4) : ((15 - lo) * 4);
-        pal[i * 4 + 0] = (unsigned char)(b & 63);
-        pal[i * 4 + 1] = (unsigned char)(g & 63);
-        pal[i * 4 + 2] = (unsigned char)(r & 63);
+        pal[i * 4 + 0] = (unsigned char) palette[i * 3 + 2];   /* B */
+        pal[i * 4 + 1] = (unsigned char) palette[i * 3 + 1];   /* G */
+        pal[i * 4 + 2] = (unsigned char) palette[i * 3 + 0];   /* R */
         pal[i * 4 + 3] = 0;
     }
     VBE_setPalette(0, 256, (char *) pal);
@@ -57,10 +48,10 @@ static void draw_test_pattern(void)
     for (y = 0; y < yres; y++)
     {
         unsigned char *row = (unsigned char *) screen + y * bytesperline;
-        int band = (y * 16) / yres;          /* 0..15 vertical brightness    */
+        int band = (y * 16) / yres;
         for (x = 0; x < bytesperline; x++)
         {
-            int bar = (x * 16) / bytesperline;  /* 0..15 vertical colour bars */
+            int bar = (x * 16) / bytesperline;
             row[x] = (unsigned char) ((bar << 4) | band);
         }
     }
@@ -68,18 +59,34 @@ static void draw_test_pattern(void)
 
 int main(int argc, char **argv)
 {
+    long grp;
+
     (void) argc;
     (void) argv;
-    (void) engine_link_anchor;
 
-    printf("ps2uke: stage-4 framebuffer test (no Duke data needed)\n");
+    printf("ps2uke: stage-5 cdfs/GRP test\n");
 
-    _setgamemode(0, 320, 200);   /* alloc `screen`, bring up gsKit */
-    make_test_palette();
+    _setgamemode(0, 320, 200);          /* alloc screen + bring up gsKit */
+
+    printf("cdfs: init_cdfs_driver() = %d\n", (int) init_cdfs_driver());
+    fflush(stdout);
+
+    grp = initgroupfile("cdfs:/DUKE3D.GRP");
+    printf("initgroupfile(cdfs:/DUKE3D.GRP) = %ld\n", grp);
+    if (grp < 0)
+        printf("  !! GRP not found on disc -- is it on the ISO as DUKE3D.GRP?\n");
+    fflush(stdout);
+
+    initengine();                        /* sets up tables; loads PALETTE.DAT */
+    apply_engine_palette();              /* push the real Duke palette to the GS */
+
     draw_test_pattern();
 
+    printf("ps2uke: presenting (colour bars in Duke's real palette)\n");
+    fflush(stdout);
+
     for (;;)
-        _nextpage();             /* present the test pattern, vsync-locked */
+        _nextpage();
 
     return 0;
 }
