@@ -1,11 +1,12 @@
 /*
- * PS2 file-I/O shim for cache1d.c -- see ps2_fileio.h for the why.
- *
- * "Build Engine & Tools" Copyright (c) 1993-1997 Ken Silverman.
- * See BUILDLIC.TXT. This file is not part of Ken's original release.
+ * PS2 file-I/O shim. jfbuild's Bopen/Bread/Blseek/Bclose are routed here
+ * (see jfbuild/include/compat.h): the GRP and all data live on the boot disc,
+ * reached via cdfs.irx -- a legacy ioman device POSIX open() can't see and that
+ * needs FIO_O_RDONLY, so disc reads go through the fio API. cdfs is brought up
+ * lazily on first use (init_cdfs_driver, from ps2_drivers).
  */
 
-#ifdef PLATFORM_PS2
+#if defined(_EE) || defined(__PS2__) || defined(PLATFORM_PS2)
 
 #define NEWLIB_PORT_AWARE      /* we deliberately use fio for the cdfs device */
 
@@ -14,9 +15,8 @@
 #include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <fileio.h>            /* fioOpen/fioRead/fioLseek/fioClose, FIO_O_RDONLY */
-
-#include "ps2_fileio.h"
+#include <fileio.h>             /* fioOpen/fioRead/fioLseek/fioClose, FIO_O_RDONLY */
+#include <ps2_cdfs_driver.h>    /* init_cdfs_driver (libps2_drivers) */
 
 /* High bit tags a descriptor as fio-owned (vs a newlib POSIX fd). */
 #define PS2_FIO_TAG   0x40000000
@@ -24,6 +24,15 @@
 static int is_disc_path(const char *p)
 {
     return (strncmp(p, "cdfs", 4) == 0) || (strncmp(p, "cdrom", 5) == 0);
+}
+
+static void ensure_cdfs(void)
+{
+    static int inited = 0;
+    if (inited) return;
+    inited = 1;
+    printf("cdfs: init_cdfs_driver() = %d\n", (int) init_cdfs_driver());
+    fflush(stdout);
 }
 
 int ps2_bopen(const char *path, int flags, ...)
@@ -34,7 +43,7 @@ int ps2_bopen(const char *path, int flags, ...)
 
     if (rdonly)
     {
-        /* A bare filename ("DUKE3D.GRP") means "the data disc". */
+        /* A bare filename ("duke3d.grp") means "the data disc". */
         if (strchr(path, ':') == NULL)
         {
             snprintf(buf, sizeof buf, "cdfs:/%s", path);
@@ -42,7 +51,9 @@ int ps2_bopen(const char *path, int flags, ...)
         }
         if (is_disc_path(p))
         {
-            int fd = fioOpen(p, FIO_O_RDONLY);
+            int fd;
+            ensure_cdfs();
+            fd = fioOpen(p, FIO_O_RDONLY);
             return (fd < 0) ? -1 : (fd | PS2_FIO_TAG);
         }
         return open(p, flags);            /* host:/mc0: read via POSIX */
@@ -72,4 +83,4 @@ int ps2_bclose(int fd)
     return close(fd);
 }
 
-#endif /* PLATFORM_PS2 */
+#endif /* PS2 */

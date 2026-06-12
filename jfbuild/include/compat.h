@@ -348,11 +348,25 @@ int Bwildmatch (const char *i, const char *j);
 # define Bcalloc calloc
 # define Brealloc realloc
 # define Bfree free
+#if defined(_EE) || defined(__PS2__)
+/* PS2: route file reads through the cdfs/fio shim (ps2_fileio.c) -- the GRP and
+   all data live on the disc, reached via cdfs (POSIX open() can't see it). */
+extern int ps2_bopen(const char *path, int flags, ...);
+extern int ps2_bread(int fd, void *buf, int len);
+extern int ps2_blseek(int fd, int off, int whence);
+extern int ps2_bclose(int fd);
+# define Bopen  ps2_bopen
+# define Bclose ps2_bclose
+# define Bwrite write
+# define Bread  ps2_bread
+# define Blseek ps2_blseek
+#else
 # define Bopen open
 # define Bclose close
 # define Bwrite write
 # define Bread read
 # define Blseek lseek
+#endif
 # define Bstat stat
 # define Bfopen fopen
 # define Bfclose fclose

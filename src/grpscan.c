@@ -134,6 +134,37 @@ int ScanGroups(void)
 
     buildprintf("Scanning for GRP files...\n");
 
+#if defined(_EE) || defined(__PS2__)
+    /* cdfs has no directory enumeration and CRC-ing the whole 44MB GRP off the
+       disc is far too slow, so register DUKE3D.GRP directly and match it to
+       grpfiles[] by size (fast: just an lseek to the end). */
+    {
+        int fh = Bopen("duke3d.grp", BO_RDONLY | BO_BINARY, BS_IREAD);
+        if (fh >= 0) {
+            int sz = Blseek(fh, 0, BSEEK_END);
+            Bclose(fh);
+            grp = (struct grpfile *) calloc(1, sizeof(struct grpfile));
+            grp->name = strdup("duke3d.grp");
+            grp->size = sz;
+            grp->next = foundgrps;
+            foundgrps = grp;
+            for (i = 0; grpfiles[i].name; i++) {
+                if (grpfiles[i].size == grp->size) {
+                    grp->ref = &grpfiles[i];
+                    grp->game = grp->ref->game;
+                    grp->crcval = grpfiles[i].crcval;
+                    break;
+                }
+            }
+            buildprintf(" Registered duke3d.grp (%d bytes, %s)\n",
+                        sz, grp->ref ? grp->ref->name : "unrecognised size");
+        } else {
+            buildprintf(" !! could not open duke3d.grp on the disc\n");
+        }
+    }
+    return 0;
+#endif
+
     LoadGroupsCache();
 
     srch = klistpath("/", "*.grp", CACHE1D_FIND_FILE);
