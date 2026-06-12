@@ -145,18 +145,17 @@ void _nextpage(void)
     if (!video_ready) return;
 
     {   /* DIAG: confirm present path + palette/framebuffer content */
-        static int fc = 0;
-        if ((fc++ % 120) == 0)
-        {
-            int palnz = 0, scrnz = 0;
-            for (i = 0; i < 256; i++)
-                if (ps2pal[i][0] | ps2pal[i][1] | ps2pal[i][2]) { palnz = 1; break; }
-            if (screen)
-                for (i = 0; i < imageSize; i += 64)
-                    if (screen[i]) { scrnz = 1; break; }
-            printf("_nextpage #%d: pal_nonzero=%d screen_nonzero=%d xres=%d yres=%d imgsz=%d\n",
-                   fc, palnz, scrnz, (int) xres, (int) yres, (int) imageSize);
-        }
+        static int fc = 0, ppal = -1, pscr = -1;
+        int palnz = 0, scrnz = 0;
+        for (i = 0; i < 256; i++)
+            if (ps2pal[i][0] | ps2pal[i][1] | ps2pal[i][2]) { palnz = 1; break; }
+        if (screen)
+            for (i = 0; i < imageSize; i += 64)
+                if (screen[i]) { scrnz = 1; break; }
+        if ((fc % 15) == 0 || palnz != ppal || scrnz != pscr)
+            printf("_nextpage #%d: pal_nonzero=%d screen_nonzero=%d xres=%d yres=%d\n",
+                   fc, palnz, scrnz, (int) xres, (int) yres);
+        ppal = palnz; pscr = scrnz; fc++;
     }
 
     /* CT32 CLUT from the live palette, CSM1-swizzled (bits 3/4 swapped). */

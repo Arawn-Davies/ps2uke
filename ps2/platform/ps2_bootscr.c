@@ -20,7 +20,7 @@ static int g_scr_active = 0;
 void BootScr_Begin(void)
 {
     init_scr();
-    scr_setXY(0, 2);    // nudge down past the TV's top-overscan clip
+    scr_setXY(0, 5);    // nudge down past the TV's top-overscan clip
     g_scr_active = 1;
     scr_printf("ps2uke boot console\n");
 }
