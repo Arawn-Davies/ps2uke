@@ -15,9 +15,14 @@
 #include <sifrpc.h>
 #include <iopcontrol.h>
 #include <sbv_patches.h>
+#include <libpad.h>             /* PAD_LEFT/PAD_RIGHT/PAD_CROSS */
 #include <ps2_cdfs_driver.h>
+#include "ps2_pad.h"
 
-#define TITLE      2486      /* from Duke's names.h: full-screen title image */
+/* full-screen tiles from Duke's names.h */
+#define TITLE       2486
+#define BETASCREEN  2493
+#define LOADSCREEN  3281
 
 /* engine + driver entry points */
 extern char  palette[768];
@@ -83,15 +88,30 @@ int main(int argc, char **argv)
     setgamemode(0, 320, 200);               /* engine view setup + our driver */
     apply_engine_palette();
 
-    printf("ps2uke: drawing TITLE (%d) fullscreen\n", TITLE);
+    ps2pad_init();
+    printf("ps2uke: D-pad Left/Right or Cross to cycle screens\n");
     fflush(stdout);
 
-    for (;;)
     {
-        clearview(0L);
-        rotatesprite(320 << 15, 200 << 15, 65536L, 0, TITLE,
-                     0, 0, 2 + 8 + 64, 0L, 0L, xdim - 1, ydim - 1);
-        nextpage();
+        static const short tiles[] = { TITLE, LOADSCREEN, BETASCREEN };
+        const int ntiles = (int) (sizeof(tiles) / sizeof(tiles[0]));
+        int      idx  = 0;
+        unsigned prev = 0;
+
+        for (;;)
+        {
+            unsigned b = ps2pad_btns();
+            unsigned pressed = b & ~prev;          /* rising edges only */
+            prev = b;
+
+            if (pressed & (PAD_RIGHT | PAD_CROSS)) idx = (idx + 1) % ntiles;
+            if (pressed & PAD_LEFT)                idx = (idx + ntiles - 1) % ntiles;
+
+            clearview(0L);
+            rotatesprite(320 << 15, 200 << 15, 65536L, 0, tiles[idx],
+                         0, 0, 2 + 8 + 64, 0L, 0L, xdim - 1, ydim - 1);
+            nextpage();
+        }
     }
 
     return 0;
