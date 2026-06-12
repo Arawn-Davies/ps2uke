@@ -101,9 +101,30 @@ static void ps2_alloc_framebuffer(long w, long h)
 
 int _setgamemode(char davidoption, long daxdim, long daydim)
 {
-    extern long qsetmode;
+    /* engine render globals the 2D/3D draw paths need (see sdl_driver.c) */
+    extern long qsetmode, xdim, ydim, ylookup[], horizycent;
+    extern long oxyaspect, oxdimen, oviewingrange;
+    extern void setvlinebpl(long);
+    extern void setview(long, long, long, long);
+    extern void clearallviews(long);
+    long i, j;
+
     ps2_alloc_framebuffer(daxdim, daydim);
     ps2_video_init(daxdim, daydim);
+
+    /* mirror sdl_driver's go_to_new_vid_mode engine setup */
+    xdim = daxdim;
+    ydim = daydim;
+    for (i = 0, j = 0; i <= ydim; i++) { ylookup[i] = j; j += bytesperline; }
+    horizycent = (ydim * 4) >> 1;
+    oxyaspect = oxdimen = oviewingrange = -1;   /* force aspect recalc */
+    setvlinebpl(bytesperline);
+    if (davidoption != -1)
+    {
+        setview(0L, 0L, xdim - 1, ydim - 1);
+        clearallviews(0L);
+    }
+
     qsetmode = 200;           /* matches BUILD's "in 3D game mode" sentinel */
     return 0;
 }
