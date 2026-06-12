@@ -19,10 +19,11 @@ EE_OBJS = $(addprefix $(OBJDIR)/, $(ENGINE_SRCS:.c=.o)) $(OBJDIR)/ps2_main.o
 
 # PLATFORM_PS2 selects ps2_compat.h in platform.h and the PS2 paths everywhere.
 # -fno-strict-aliasing: BUILD type-puns heavily (same caveat as the SDL build).
-EE_CFLAGS += -DPLATFORM_PS2 -fno-strict-aliasing
-EE_INCS   += -I$(BE)
+EE_CFLAGS  += -DPLATFORM_PS2 -fno-strict-aliasing
+EE_INCS    += -I$(BE) -I$(GSKIT)/include -I$(PS2SDK)/ports/include
+EE_LDFLAGS += -L$(GSKIT)/lib -L$(PS2SDK)/ports/lib
 
-EE_LIBS = -lc
+EE_LIBS = -lgskit -ldmakit -lgraph -ldma -lc
 
 all: $(EE_BIN)
 
