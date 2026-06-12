@@ -36,6 +36,7 @@ mkdir -p "$STAGE"
 cp "$ROOT/ps2/SYSTEM.CNF"   "$STAGE/SYSTEM.CNF"
 cp "$ROOT/ps2/ps2uke.elf"   "$STAGE/PS2UKE.ELF"
 cp "$grp"                   "$STAGE/DUKE3D.GRP"
+cp "$ROOT/ps2/duke3d.cfg"   "$STAGE/DUKE3D.CFG"   # ship a 320x200 config
 
 echo ">> building $OUT  (GRP: $grp)"
 mkdir -p "$ROOT/dist"

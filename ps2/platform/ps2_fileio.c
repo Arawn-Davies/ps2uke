@@ -48,6 +48,12 @@ int ps2_bopen(const char *path, int flags, ...)
     char buf[96];
     const char *p = path;
 
+    /* Strip leading "./" search-path noise so cdfs gets a clean path
+       ("./duke3d.cfg" -> "duke3d.cfg" -> cdfs:/duke3d.cfg). */
+    while (path[0] == '.' && path[1] == '/')
+        path += 2;
+    p = path;
+
     if (rdonly)
     {
         /* A bare filename ("duke3d.grp") means "the data disc". */

@@ -61,7 +61,13 @@ int32 SafeOpen(const char *filename, int32 mode, int32 sharemode)
 	int32 h;
 
 	h = openfrompath(filename, mode, sharemode);
+#if defined(_EE) || defined(__PS2__)
+	/* The disc is read-only and optional files (config, saves) may be missing;
+	   a failed open must not fatally Error() or the game can't boot. */
+	if (h < 0) { printf("SafeOpen: '%s' failed (%s)\n", filename, strerror(errno)); return -1; }
+#else
 	if (h < 0) Error("Error opening %s: %s", filename, strerror(errno));
+#endif
 
 	if (h < MaxFiles) {
 		if (FileNames[h]) SafeFree(FileNames[h]);
@@ -103,8 +109,17 @@ void SafeClose ( int32 handle )
 
 boolean SafeFileExists(const char *filename)
 {
+#if defined(_EE) || defined(__PS2__)
+	/* access() uses POSIX open() which can't see the cdfs device; probe via
+	   openfrompath (routed through the cdfs shim) instead. */
+	int32 h = openfrompath(filename, O_RDONLY|O_BINARY, S_IREAD);
+	if (h < 0) return false;
+	close(h);
+	return true;
+#else
 	if (!access(filename, F_OK)) return true;
 	return false;
+#endif
 }
 
 int32 SafeFileLength ( int32 handle )
