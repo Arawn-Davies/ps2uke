@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <debug.h>      // init_scr, scr_printf, scr_setXY
+#include <sio.h>        // sio_write (EE serial; PCSX2 mirrors it to its console)
 
 static int g_scr_active = 0;
 
@@ -33,20 +34,29 @@ void BootScr_End(void)
    scr_printf needs a NUL-terminated string, so copy the payload in chunks. */
 int _write(int fd, const void *buf, size_t nbyte)
 {
-    if ((fd == 1 || fd == 2) && g_scr_active)
+    if (fd == 1 || fd == 2)
     {
-        const char *p = (const char *) buf;
-        char tmp[120];
-        size_t i = 0;
-        while (i < nbyte)
+        if (g_scr_active)
         {
-            size_t n = nbyte - i;
-            if (n > sizeof(tmp) - 1)
-                n = sizeof(tmp) - 1;
-            memcpy(tmp, p + i, n);
-            tmp[n] = '\0';
-            scr_printf("%s", tmp);
-            i += n;
+            const char *p = (const char *) buf;
+            char tmp[120];
+            size_t i = 0;
+            while (i < nbyte)
+            {
+                size_t n = nbyte - i;
+                if (n > sizeof(tmp) - 1)
+                    n = sizeof(tmp) - 1;
+                memcpy(tmp, p + i, n);
+                tmp[n] = '\0';
+                scr_printf("%s", tmp);
+                i += n;
+            }
+        }
+        else
+        {
+            /* boot console handed off; keep stdout/stderr on the EE serial so
+               PCSX2's console still shows the log (and hardware via SIO). */
+            sio_write((void *) buf, nbyte);
         }
     }
     return (int) nbyte;
