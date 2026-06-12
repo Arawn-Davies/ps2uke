@@ -195,7 +195,7 @@ static char ApogeePath[256];
 
 void FixFilePath(char *filename)
 {
-#if defined(PLATFORM_UNIX) && !defined(DC)
+#if (defined(PLATFORM_UNIX) || defined(PLATFORM_PS2)) && !defined(DC)
     char *ptr;
     char *lastsep = filename;
 
@@ -305,7 +305,7 @@ int _dos_findnext(struct find_t *f)
     return(0);
 }
 
-#elif PLATFORM_UNIX 
+#elif (PLATFORM_UNIX || PLATFORM_PS2)
 int _dos_findfirst(char *filename, int x, struct find_t *f)
 {
     char *ptr;

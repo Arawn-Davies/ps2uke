@@ -62,6 +62,12 @@ Prepared for public release: 03/21/2003 - Charlie Wiederhold, 3D Realms
 #include "dukeunix.h"
 #endif
 
+/* PS2 reuses the Unix DOS-replacement defs (STUBBED, printchrasm, find_t,
+   strcmpi, ...); newlib provides the POSIX headers dukeunix.h needs. */
+#if PLATFORM_PS2
+#include "dukeunix.h"
+#endif
+
 #if PLATFORM_WIN32
 #include "dukewin.h"
 #endif

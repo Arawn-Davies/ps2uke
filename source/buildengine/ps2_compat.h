@@ -43,6 +43,7 @@ typedef unsigned char  Uint8;
 #define __interrupt
 #define interrupt
 #define far
+#define cdecl                 /* Watcom/DOS calling-convention keyword */
 #define kmalloc(x)  malloc(x)
 #define kkmalloc(x) malloc(x)
 #define kfree(x)    free(x)
