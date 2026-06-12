@@ -1,5 +1,34 @@
 # Progress log
 
+## 2026-06-12 (cont.) — Stage 8a: Duke game logic compiles for PS2 (`2d9c30b`)
+
+15/17 Duke game TUs compile on the ps2dev toolchain (incl. `menues.c`, the
+menu). Edits: `#define cdecl` in ps2_compat.h; include `dukeunix.h` for
+PLATFORM_PS2 (STUBBED/printchrasm/find_t/strcmpi/...); route global.c's UNIX
+dir-scan branches to PS2; build with `-std=gnu99` (GCC 15 = C23, where `bool`
+param names are reserved). Left: SDL-audio glue (dukemusc.c/fx_man.c -> PS2
+audio later) + the editor (astub.c, excluded).
+
+Link recon (all Duke + engine objects): the undefined surface is cleanly
+grouped -- audio (`FX_*`/`MUSIC_*`), multiplayer (`connecthead`/`getpacket`/
+`numplayers`/...), timer (`inittimer`/`uninittimer`), a couple driver globals
+(`vgacompatible`), `ltoa`; the rest resolve from `-lc`. All stubbable for a
+single-player menu.
+
+**Key finding:** like the engine earlier, the icculus repo ships Duke's game
+*logic* but NOT the game's `main()`/startup driver -- the only `main()` in the
+tree is the BUILD editor's (build.c). game.c has the loop pieces
+(`displayrooms`/`menus`/`moveloop`/`playback`) but nothing boots them. So
+reaching the real menu = WRITING Duke's init/startup sequence (engine init ->
+CON compile via gamedef -> palette/tiles -> game-state init -> title/menu loop),
+reconstructable from the public 2003 game.c main. That's the next stage.
+
+### Next: write the Duke startup driver
+1. Stub audio + multiplayer + timer/globals so the Duke objects LINK.
+2. Map the pad to Duke's keyboard layer (KB_KeyDown), not just the demo reader.
+3. Reconstruct Duke's init/main + menu loop; iterate runtime (CON, game state)
+   until the real menu is on screen and navigable.
+
 ## 2026-06-12 (cont.) — Stage 7: PS2 controller input (`c3bc3ef`)
 
 The engine is now interactive on real PS2 input. `ps2_pad.c/.h` (libpad): load
