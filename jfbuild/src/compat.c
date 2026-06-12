@@ -332,7 +332,17 @@ char *Bgetsystemdrives(void)
 
 off_t Bfilelength(int fd)
 {
-#ifdef _MSC_VER
+#if defined(_EE) || defined(__PS2__)
+	/* cdfs fds (opened via the fio shim) aren't real POSIX fds, so fstat()
+	   fails -> -1 -> callers malloc(0) and over-read. Get the size with the
+	   cdfs-aware seek instead. ps2_blseek handles both tagged and POSIX fds. */
+	extern int ps2_blseek(int fd, int off, int whence);
+	int cur = ps2_blseek(fd, 0, SEEK_CUR);
+	int end = ps2_blseek(fd, 0, SEEK_END);
+	if (end < 0) return -1;
+	ps2_blseek(fd, cur, SEEK_SET);
+	return (off_t) end;
+#elif defined(_MSC_VER)
 	return (off_t)_filelength(fd);
 #else
 	struct stat st;
