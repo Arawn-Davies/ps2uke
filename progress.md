@@ -1,5 +1,32 @@
 # Progress log
 
+## 2026-06-12 (cont.) — Stage 4: gsKit framebuffer present path (`d5dce24`)
+
+`ps2_driver.c` now brings up gsKit and presents the engine's 8-bit framebuffer:
+`ps2_video_init()` (dmaKit + `gsKit_init_global`/`init_screen`, NTSC, double-
+buffered, Z off) sets up a `GS_PSM_T8` texture backed directly by the engine's
+`screen` buffer with a `GS_PSM_CT32` CLUT; `_nextpage()` uploads screen+CLUT to
+VRAM, blits fullscreen-scaled (GS does the indexed→RGB expansion), vsync-flips;
+`VBE_setPalette()` scales BUILD's 0..63 channels to 0..255 and applies the GS
+CSM1 CLUT index swizzle (bits 3/4 swapped).
+
+`ps2_main.c` is a **data-free** framebuffer test — fills `screen` with colour
+bars + a brightness gradient and presents every frame. **Builds clean, links
+into a valid ELF32 MIPS executable.**
+
+**Verification status:** compiles + links only. Visual confirmation needs running
+`ps2/ps2uke.elf` on **PCSX2** or hardware (not auto-launched here). Expected: 16
+vertical colour bars over a 16-step vertical brightness gradient. If the bars are
+miscoloured, the CLUT swizzle/`VBE_setPalette` scaling is the first suspect; if
+nothing shows, check the gsKit mode (NTSC vs PAL) and the T8 texture upload.
+
+To run: `./build.sh` (from repo root) → load `ps2/ps2uke.elf` in PCSX2.
+
+### Next: real palette/art (needs Duke data)
+Supply `DUKE3D.GRP` (shareware ~11 MB is fine) or the loose `PALETTE.DAT` +
+`TILES000.ART`. Then swap the synthetic palette/pattern for `initengine()` +
+`loadpalette()` + a real ART tile, and we get actual Duke pixels on screen.
+
 ## 2026-06-12 (cont.) — BUILD engine compiles + links for PS2 (stages 1–3)
 
 Verified against the real ps2dev toolchain (gcc 15.2.0) in Docker.
