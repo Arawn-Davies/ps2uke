@@ -202,14 +202,22 @@ void clear2dscreen(void) { if (screen) memset(screen, 0, imageSize); }
 int VBE_setPalette(uint8_t *palettebuffer)
 {
     uint8_t *p = palettebuffer;
-    int i;
+    int i, allz = 1;
     for (i = 0; i < 256; i++)
     {
         unsigned b = *p++, g = *p++, r = *p++;
         p++;                            /* reserved */
+        if (b | g | r) allz = 0;
         ps2pal[i][0] = (unsigned char) ((r << 2) | (r >> 4));   /* 0..63 -> 0..255 */
         ps2pal[i][1] = (unsigned char) ((g << 2) | (g >> 4));
         ps2pal[i][2] = (unsigned char) ((b << 2) | (b >> 4));
+    }
+    {   /* DIAG: who pushes a black palette, and when */
+        static int pc = 0, pz = -1;
+        if (allz != pz)
+            printf("VBE_setPalette #%d allzero=%d  (entry1 bgr=%d,%d,%d)\n",
+                   pc, allz, palettebuffer[0], palettebuffer[1], palettebuffer[2]);
+        pz = allz; pc++;
     }
     return 0;
 }
