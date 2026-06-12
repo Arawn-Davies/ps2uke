@@ -3,6 +3,10 @@
 This document is the architecture map of the port: what the base is, how the PS2
 seam is wired, and the staged plan. The code is the territory; this is the map.
 
+> **Full subsystem deep-dive (with diagrams):**
+> [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — boot sequence, video/input/
+> filesystem/audio pipelines, EE↔IOP model, and the gotchas.
+
 > **History:** the project first tried the **icculus** Duke3D source (no engine,
 > no `main()`), then **Chocolate Duke3D** (dead-ended on its VESA-BIOS palette
 > path — there is no VESA on a PS2, so the screen stayed black after the intro).
