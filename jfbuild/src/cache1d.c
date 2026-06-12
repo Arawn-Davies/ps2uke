@@ -20,7 +20,6 @@
 #define read   Bread
 #define lseek  Blseek
 #define close  Bclose
-#define write  Bwrite
 #endif
 
 #ifdef WITHKPLIB

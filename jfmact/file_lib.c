@@ -51,7 +51,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define read   Bread
 #define close  Bclose
 #define lseek  Blseek
-#define write  Bwrite
 #endif
 
 #ifndef O_BINARY
