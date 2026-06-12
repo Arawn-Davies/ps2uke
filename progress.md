@@ -1,5 +1,23 @@
 # Progress log
 
+## 2026-06-12 (cont.) — Stage 7: PS2 controller input (`c3bc3ef`)
+
+The engine is now interactive on real PS2 input. `ps2_pad.c/.h` (libpad): load
+`rom0:SIO2MAN`/`PADMAN`, `padInit`/`padPortOpen`, `ps2pad_btns()` returns an
+active-high button mask. The test harness cycles full-screen tiles
+(TITLE/LOADSCREEN/BETASCREEN) on D-pad Left/Right or Cross. Verified in PCSX2:
+buttons change the screen. Link adds `-lpad`.
+
+(Note: tiles are force-stretched fullscreen, so a non-320x200 tile in the set
+looks distorted -- a property of the arbitrary demo tiles, not a render bug.
+The real menu draws tiles at proper size/pos.)
+
+### Next: Duke's real menu, then the game
+- Map the pad to BUILD's key events (the `keystatus[]`/key queue Duke reads) so
+  we drive Duke's actual menu instead of the screen-cycler.
+- Then wire the Duke game objects (`source/*.c`): real menu + game loop +
+  `drawrooms` (the 3D world).
+
 ## 2026-06-12 (cont.) — Stage 6: real Duke ART on screen — TITLE logo (`005d8bd`)
 
 The Duke3D TITLE tile (2486) renders full-screen in PCSX2 in the real palette --
