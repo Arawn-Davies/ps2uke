@@ -12,7 +12,23 @@
 
 #include <stdio.h>
 
+#include <sifrpc.h>            /* SifInitRpc */
+#include <iopcontrol.h>        /* SifIopReset/SifIopSync */
+#include <sbv_patches.h>       /* sbv_patch_* (load IRX from EE memory) */
 #include <ps2_cdfs_driver.h>   /* init_cdfs_driver() (libps2_drivers) */
+
+/* Reset+prepare the IOP so ps2_drivers can SifExecModuleBuffer the embedded
+   IRX modules (cdvd + cdfs). Normally SDL2main's main wrapper does this; we
+   don't link SDL, so we do it ourselves before any init_*_driver() call. */
+static void ps2_iop_init(void)
+{
+    SifInitRpc(0);
+    while (!SifIopReset("", 0)) { }
+    while (!SifIopSync()) { }
+    SifInitRpc(0);
+    sbv_patch_enable_lmb();              /* allow load-module-from-buffer */
+    sbv_patch_disable_prefix_check();
+}
 
 /* Driver + engine entry points (buildengine/display.h, cache1d.c, engine.c). */
 extern char *screen;
@@ -30,12 +46,31 @@ static void apply_engine_palette(void)
 {
     /* BUILD palette is R,G,B (0..63). VBE_setPalette wants B,G,R,pad per entry. */
     unsigned char pal[256 * 4];
-    int i;
+    int i, nonzero = 0;
+
+    for (i = 0; i < 768; i++)
+        if (palette[i]) { nonzero = 1; break; }
+
+    printf("palette from GRP: %s\n", nonzero ? "LOADED (non-zero)" : "EMPTY (all zero)");
+    fflush(stdout);
+
     for (i = 0; i < 256; i++)
     {
-        pal[i * 4 + 0] = (unsigned char) palette[i * 3 + 2];   /* B */
-        pal[i * 4 + 1] = (unsigned char) palette[i * 3 + 1];   /* G */
-        pal[i * 4 + 2] = (unsigned char) palette[i * 3 + 0];   /* R */
+        if (nonzero)
+        {
+            pal[i * 4 + 0] = (unsigned char) palette[i * 3 + 2];   /* B */
+            pal[i * 4 + 1] = (unsigned char) palette[i * 3 + 1];   /* G */
+            pal[i * 4 + 2] = (unsigned char) palette[i * 3 + 0];   /* R */
+        }
+        else
+        {
+            /* DIAG fallback so the bars still show if the GRP palette is empty:
+               a synthetic hue/value ramp (0..63 per channel, like the engine). */
+            int hi = i >> 4, lo = i & 15;
+            pal[i * 4 + 0] = (unsigned char) ((hi & 1) ? (lo << 2) : ((15 - lo) << 2));
+            pal[i * 4 + 1] = (unsigned char) ((lo << 2) & 0x3f);
+            pal[i * 4 + 2] = (unsigned char) ((hi & 4) ? (lo << 2) : (hi << 2));
+        }
         pal[i * 4 + 3] = 0;
     }
     VBE_setPalette(0, 256, (char *) pal);
@@ -66,8 +101,7 @@ int main(int argc, char **argv)
 
     printf("ps2uke: stage-5 cdfs/GRP test\n");
 
-    _setgamemode(0, 320, 200);          /* alloc screen + bring up gsKit */
-
+    ps2_iop_init();                      /* IOP/SIF first, before anything */
     printf("cdfs: init_cdfs_driver() = %d\n", (int) init_cdfs_driver());
     fflush(stdout);
 
@@ -77,6 +111,7 @@ int main(int argc, char **argv)
         printf("  !! GRP not found on disc -- is it on the ISO as DUKE3D.GRP?\n");
     fflush(stdout);
 
+    _setgamemode(0, 320, 200);          /* alloc screen + bring up gsKit */
     initengine();                        /* sets up tables; loads PALETTE.DAT */
     apply_engine_palette();              /* push the real Duke palette to the GS */
 

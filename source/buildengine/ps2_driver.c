@@ -20,6 +20,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <malloc.h>           /* memalign (GS DMA wants 128-byte-aligned data) */
 #include <gsKit.h>
 #include <dmaKit.h>
 #include "platform.h"
@@ -38,49 +39,48 @@ char permanentupdate = 0;
 
 void faketimerhandler(void);   /* defined below; called from _nextpage */
 
-/* ---- gsKit state -------------------------------------------------------- */
+/* ---- gsKit state (mirrors ps2oom's proven PSMT8 backend) ---------------- */
 static GSGLOBAL *gsGlobal = NULL;
-static GSTEXTURE fbtex;                              /* T8 texture == screen   */
-static u32 clutbuf[256] __attribute__((aligned(16)));/* CT32 CLUT (EE side)    */
+static GSTEXTURE fbtex;                  /* T8 texture; Mem is an aligned copy */
+static unsigned char ps2pal[256][3];     /* live palette (R,G,B 0..255)        */
 static int video_ready = 0;
-
-/* The GS 256-entry CSM1 CLUT stores indices with bits 3 and 4 swapped vs the
-   linear palette order. Map a linear index to its GS slot. */
-static inline int clut_swizzle(int i)
-{
-    return (i & 0xE7) | ((i & 0x08) << 1) | ((i & 0x10) >> 1);
-}
 
 static void ps2_video_init(long w, long h)
 {
     if (gsGlobal) return;
 
+    gsGlobal = gsKit_init_global();
+    gsGlobal->Mode      = GS_MODE_NTSC;   /* deterministic, region-independent */
+    gsGlobal->Interlace = GS_INTERLACED;
+    gsGlobal->Field     = GS_FIELD;
+    gsGlobal->Width     = 640;
+    gsGlobal->Height    = 448;
+    gsGlobal->PSM            = GS_PSM_CT24;
+    gsGlobal->PSMZ           = GS_PSMZ_16S;
+    gsGlobal->ZBuffering     = GS_SETTING_OFF;
+    gsGlobal->DoubleBuffering = GS_SETTING_ON;
+
     dmaKit_init(D_CTRL_RELE_OFF, D_CTRL_MFD_OFF, D_CTRL_STS_UNSPEC,
-                D_CTRL_STD_OFF, D_CTRL_RCYC_8, 0);
+                D_CTRL_STD_OFF, D_CTRL_RCYC_8, 1 << DMA_CHANNEL_GIF);
     dmaKit_chan_init(DMA_CHANNEL_GIF);
 
-    gsGlobal = gsKit_init_global();
-    gsGlobal->PSM = GS_PSM_CT24;
-    gsGlobal->ZBuffering = GS_SETTING_OFF;
-    gsGlobal->DoubleBuffering = GS_SETTING_ON;
-    gsGlobal->PrimAlphaEnable = GS_SETTING_OFF;
     gsKit_init_screen(gsGlobal);
-    gsKit_set_test(gsGlobal, GS_ZTEST_OFF);
-    gsKit_mode_switch(gsGlobal, GS_ONESHOT);
+    gsKit_mode_switch(gsGlobal, GS_ONESHOT);   /* queue + flip every frame */
+    gsKit_TexManager_init(gsGlobal);
 
-    /* The 8-bit framebuffer the engine renders into is the texture itself. */
-    fbtex.Width   = w;
-    fbtex.Height  = h;
-    fbtex.PSM     = GS_PSM_T8;
-    fbtex.ClutPSM = GS_PSM_CT32;
-    fbtex.Filter  = GS_FILTER_NEAREST;
-    fbtex.Mem     = (u32 *) screen;
-    fbtex.Clut    = clutbuf;
-    gsKit_setup_tbw(&fbtex);
-    fbtex.Vram = gsKit_vram_alloc(gsGlobal,
-                     gsKit_texture_size(w, h, GS_PSM_T8), GSKIT_ALLOC_USERBUFFER);
-    fbtex.VramClut = gsKit_vram_alloc(gsGlobal,
-                     gsKit_texture_size(16, 16, GS_PSM_CT32), GSKIT_ALLOC_USERBUFFER);
+    /* 8-bit indexed texture + 256-entry CT32 CLUT. Mem is a 128-aligned upload
+       buffer we memcpy `screen` into each frame (screen is malloc'd, unaligned;
+       the GS DMA wants aligned source data). TexManager owns the VRAM. */
+    fbtex.Width    = w;
+    fbtex.Height   = h;
+    fbtex.PSM      = GS_PSM_T8;
+    fbtex.ClutPSM  = GS_PSM_CT32;
+    fbtex.Filter   = GS_FILTER_NEAREST;
+    fbtex.Delayed  = 0;
+    fbtex.Vram     = 0;
+    fbtex.VramClut = 0;
+    fbtex.Mem  = (u32 *) memalign(128, gsKit_texture_size_ee(w, h, GS_PSM_T8));
+    fbtex.Clut = (u32 *) memalign(128, gsKit_texture_size_ee(256, 1, GS_PSM_CT32));
 
     video_ready = 1;
 }
@@ -126,20 +126,44 @@ void *_getVideoBase(void) { return (void *) screen; }
 
 void _nextpage(void)
 {
+    u32 *clut;
+    int i;
+
     if (!video_ready) return;
 
-    /* Push the engine's 8-bit frame + CLUT to VRAM and blit it fullscreen,
-       letting the GS expand the indexed pixels through the palette. */
-    gsKit_clear(gsGlobal, GS_SETREG_RGBAQ(0x00, 0x00, 0x00, 0x80, 0x00));
-    gsKit_texture_upload(gsGlobal, &fbtex);
+    /* Rebuild the CT32 CLUT from the live palette every frame. The GS stores a
+       256-entry CSM1 CLUT swizzled: palette-index bits 3 and 4 are swapped in
+       VRAM, and gsKit doesn't fix it -- so write each colour to its swizzled
+       slot, else grays/browns tint green. RGBA32 = R|G<<8|B<<16|A<<24, A=0x80. */
+    clut = fbtex.Clut;
+    for (i = 0; i < 256; i++)
+    {
+        int j = (i & ~0x18) | ((i & 0x08) << 1) | ((i & 0x10) >> 1);
+        clut[j] = (u32) ps2pal[i][0]
+                | ((u32) ps2pal[i][1] << 8)
+                | ((u32) ps2pal[i][2] << 16)
+                | (0x80u << 24);
+    }
+
+    /* Copy the engine's 8-bit frame into the aligned upload buffer. */
+    if (screen)
+        memcpy(fbtex.Mem, screen, (size_t) imageSize);
+
+    gsKit_clear(gsGlobal, GS_SETREG_RGBAQ(0x00, 0x00, 0x00, 0x00, 0x00));
+
+    gsKit_TexManager_invalidate(gsGlobal, &fbtex);   /* frame changed; re-upload */
+    gsKit_TexManager_bind(gsGlobal, &fbtex);
     gsKit_prim_sprite_texture(gsGlobal, &fbtex,
-        0.0f, 0.0f,
-        0.0f, 0.0f,
-        (float) gsGlobal->Width, (float) gsGlobal->Height,
-        (float) fbtex.Width, (float) fbtex.Height,
-        2, GS_SETREG_RGBAQ(0x80, 0x80, 0x80, 0x80, 0x00));
+        0.0f, 0.0f,                                            /* screen x1,y1 */
+        0.0f, 0.0f,                                            /* tex u1,v1    */
+        (float) gsGlobal->Width, (float) gsGlobal->Height,    /* x2,y2 (fill) */
+        (float) fbtex.Width, (float) fbtex.Height,            /* u2,v2        */
+        0,                                                     /* z            */
+        GS_SETREG_RGBAQ(0x80, 0x80, 0x80, 0x80, 0x00));       /* 1.0 modulate */
+
     gsKit_queue_exec(gsGlobal);
     gsKit_sync_flip(gsGlobal);
+    gsKit_TexManager_nextFrame(gsGlobal);
 
     faketimerhandler();   /* keep BUILD's frame/timer bookkeeping advancing */
 }
@@ -157,9 +181,6 @@ void clear2dscreen(void)
 
 /* ---- palette (STUB: upload to GS CLUT in stage 4) ------------------------ */
 
-/* Raw BUILD palette (R,G,B, 0..63 each) kept so VBE_getPalette round-trips. */
-static unsigned char ps2pal[256][3];
-
 int VBE_setPalette(long start, long num, char *palettebuffer)
 {
     long i;
@@ -167,18 +188,15 @@ int VBE_setPalette(long start, long num, char *palettebuffer)
     for (i = 0; i < num; i++)
     {
         int idx = (int) (start + i);
-        /* sdl_driver.c hands the palette over as B,G,R,pad per entry. */
+        /* sdl_driver.c hands the palette over as B,G,R,pad per entry. Scale
+           BUILD's 0..63 channels to 0..255; _nextpage builds the GS CLUT. */
         unsigned int b = *p++;
         unsigned int g = *p++;
         unsigned int r = *p++;
         p++;                            /* pad */
-        ps2pal[idx][0] = (unsigned char) r;
-        ps2pal[idx][1] = (unsigned char) g;
-        ps2pal[idx][2] = (unsigned char) b;
-        /* 0..63 -> 0..255, alpha 0x80 = "fully opaque" in GS terms. */
-        clutbuf[clut_swizzle(idx)] =
-            ((r << 2) & 0xff) | (((g << 2) & 0xff) << 8) |
-            (((b << 2) & 0xff) << 16) | (0x80u << 24);
+        ps2pal[idx][0] = (unsigned char) ((r << 2) | (r >> 4));
+        ps2pal[idx][1] = (unsigned char) ((g << 2) | (g >> 4));
+        ps2pal[idx][2] = (unsigned char) ((b << 2) | (b >> 4));
     }
     return 0;
 }
@@ -189,9 +207,9 @@ int VBE_getPalette(long start, long num, char *dapal)
     unsigned char *p = (unsigned char *) dapal;
     for (i = 0; i < num; i++)
     {
-        *p++ = ps2pal[start + i][2];
-        *p++ = ps2pal[start + i][1];
-        *p++ = ps2pal[start + i][0];
+        *p++ = (unsigned char) (ps2pal[start + i][2] >> 2);   /* back to 0..63 */
+        *p++ = (unsigned char) (ps2pal[start + i][1] >> 2);
+        *p++ = (unsigned char) (ps2pal[start + i][0] >> 2);
         *p++ = 0;
     }
     return 0;
