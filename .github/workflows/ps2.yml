@@ -1,0 +1,48 @@
+name: PS2 build
+
+# Builds the PlayStation 2 port (ps2uke) in the official ps2dev toolchain and
+# uploads the ELF. No game data (DUKE3D.GRP) is embedded, so the artifact
+# contains no copyrighted assets; supply a GRP at runtime.
+#
+# The PS2 port lives in ps2/. Until that directory exists, this job just
+# verifies the ps2dev cross-toolchain comes up cleanly, so the build stays green
+# while the port is scaffolded.
+
+on:
+  push:
+    branches: [ master, main, ps2-port ]
+    paths: [ 'ps2/**', 'source/**', 'Dockerfile', '.github/workflows/ps2.yml' ]
+  pull_request:
+    paths: [ 'ps2/**', 'source/**' ]
+  workflow_dispatch:
+
+jobs:
+  ps2-elf:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Run the build inside the ps2dev image (full PS2 toolchain + SDL2/gsKit/
+      # audsrv). checkout runs on the host so we don't need node in the
+      # Alpine-based toolchain image.
+      - name: Build PS2 ELF
+        run: |
+          docker run --rm -v "$PWD:/work" -w /work ghcr.io/ps2dev/ps2dev:latest \
+            sh -c '
+              set -e
+              apk add --no-cache make bash >/dev/null
+              if [ -f ps2/Makefile ]; then
+                cd ps2 && make
+              else
+                echo "No ps2/Makefile yet -- verifying toolchain only."
+                mips64r5900el-ps2-elf-gcc --version
+              fi
+            '
+
+      - name: Upload ELF
+        if: hashFiles('ps2/*.elf') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: duke3d-ps2
+          path: ps2/*.elf
+          if-no-files-found: error

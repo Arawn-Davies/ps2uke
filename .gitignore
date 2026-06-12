@@ -1,0 +1,26 @@
+*.o
+*.obj
+*.exe
+*.DS_Store
+*.log
+*.user
+*~
+.vs/
+Debug/
+Release/
+Build/
+
+# PS2 build output
+build/
+*.elf
+*.map
+*.irx
+
+# Copyright: never commit game data. Duke3D needs DUKE3D.GRP / *.RTS / *.CON
+# etc., which are user-supplied (id Software / 3D Realms). Keep them out.
+*.grp
+*.GRP
+*.rts
+*.RTS
+*.dmo
+*.DMO
