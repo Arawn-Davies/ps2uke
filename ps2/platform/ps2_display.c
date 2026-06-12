@@ -93,6 +93,12 @@ int32_t _setgamemode(uint8_t davidoption, int32_t daxdim, int32_t daydim)
     extern void clearallviews(int32_t);
     int32_t i, j;
 
+    /* Always render at Duke's native 320x200; the GS upscales the PSMT8 texture
+       to the full display in _nextpage. (640x480 software rendering on the EE
+       would be 4x the pixels.) */
+    daxdim = 320;
+    daydim = 200;
+
     if (screen) { free(screen); screen = NULL; }
     xdim = xres = daxdim;
     ydim = yres = daydim;
@@ -144,18 +150,19 @@ void _nextpage(void)
 
     if (!video_ready) return;
 
-    {   /* DIAG: confirm present path + palette/framebuffer content */
-        static int fc = 0, ppal = -1, pscr = -1;
+    {   /* DIAG: present path + palette/framebuffer + timing */
+        extern volatile int32_t totalclock;
+        static int fc = 0;
         int palnz = 0, scrnz = 0;
         for (i = 0; i < 256; i++)
             if (ps2pal[i][0] | ps2pal[i][1] | ps2pal[i][2]) { palnz = 1; break; }
         if (screen)
             for (i = 0; i < imageSize; i += 64)
                 if (screen[i]) { scrnz = 1; break; }
-        if ((fc % 15) == 0 || palnz != ppal || scrnz != pscr)
-            printf("_nextpage #%d: pal_nonzero=%d screen_nonzero=%d xres=%d yres=%d\n",
-                   fc, palnz, scrnz, (int) xres, (int) yres);
-        ppal = palnz; pscr = scrnz; fc++;
+        if ((fc % 30) == 0)
+            printf("_np #%d: pal=%d scr=%d ticks=%u totalclock=%d\n",
+                   fc, palnz, scrnz, (unsigned) getticks(), (int) totalclock);
+        fc++;
     }
 
     /* CT32 CLUT from the live palette, CSM1-swizzled (bits 3/4 swapped). */
