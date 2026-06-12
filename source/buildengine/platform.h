@@ -16,6 +16,16 @@
 #endif
 #elif (defined PLATFORM_DOS)
 #include "doscmpat.h"
+#elif (defined PLATFORM_PS2)
+#include "ps2_compat.h"
+/* PS2 EE is little-endian; newlib here has no <endian.h>, so set the byte-order
+   macros the block below keys off of directly. */
+#ifndef __LITTLE_ENDIAN
+#define __LITTLE_ENDIAN 1234
+#endif
+#ifndef __BYTE_ORDER
+#define __BYTE_ORDER __LITTLE_ENDIAN
+#endif
 #else
 #error Define your platform!
 #endif
