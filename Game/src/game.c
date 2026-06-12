@@ -8056,10 +8056,18 @@ int dukeGRP_Match(char* filename,int length)
 
 #include <dirent.h>
 void findGRPToUse(char * groupfilefullpath){
-    
+
     char directoryToScan[512];
     struct dirent* dirEntry ;
-    
+
+#ifdef PLATFORM_PS2
+    /* cdfs has no directory enumeration (opendir -> nulldev), so skip the scan
+       and open the GRP directly; the fio shim maps it to cdfs:/DUKE3D.GRP. */
+    (void) dirEntry; (void) directoryToScan;
+    strcpy(groupfilefullpath, "DUKE3D.GRP");
+    return;
+#endif
+
     directoryToScan[0] = '\0';
     
     if (getGameDir()[0] != '\0')
