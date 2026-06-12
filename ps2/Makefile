@@ -29,8 +29,8 @@ MACT_SRC = animlib control file_lib keyboard mathutil mouse scriplib util_lib
 # Audio: silent (driver_nosound) for now; no vorbis/flac (HAVE_* off).
 AUD_SRC  = asssys cd drivers fx_man midi mix mixst multivoc music pitch \
            driver_nosound
-# Our PS2 glue: cdfs/GRP file shim.
-PLAT_SRC = ps2_fileio ps2_stubs
+# Our PS2 glue: cdfs/GRP file shim, build stubs, DualShock input.
+PLAT_SRC = ps2_fileio ps2_stubs ps2_pad
 
 EE_OBJS = $(addprefix $(OBJDIR)/jfb_,  $(addsuffix .o,$(JFB_SRC)))  \
           $(addprefix $(OBJDIR)/game_, $(addsuffix .o,$(GAME_SRC))) \

@@ -1253,6 +1253,60 @@ static void loadappicon(void)
 
 
 //
+#if defined(_EE) || defined(__PS2__)
+// PS2 DualShock -> BUILD key events. SDL2's PS2 port ships no joystick backend,
+// so we read the pad directly with libpad (ps2_pad.c) and inject presses through
+// the same keystatus[]/keyfifo[] path as the keyboard. Modelled on ps2quake's
+// IN_PadButtons(): one mapping serves menus and gameplay because Duke's classic
+// bindings already overlap (arrows = menu-nav + move/turn, LCtrl = Fire, ...).
+// Edge-triggered so holds and button chords behave.
+extern unsigned ps2pad_btns(void);   // ps2_pad.c (active-high: bit set = pressed)
+
+static void ps2_pad_inject(void)
+{
+	enum {   // libpad button masks (after ps2pad_btns() inverts to active-high)
+		P_SELECT=0x0001, P_START=0x0008,
+		P_UP=0x0010, P_RIGHT=0x0020, P_DOWN=0x0040, P_LEFT=0x0080,
+		P_L2=0x0100, P_R2=0x0200, P_L1=0x0400, P_R1=0x0800,
+		P_TRIANGLE=0x1000, P_CIRCLE=0x2000, P_CROSS=0x4000, P_SQUARE=0x8000
+	};
+	static const struct { unsigned mask; unsigned char sc; } map[] = {
+		{ P_UP,       0xc8 },  // Up arrow   : menu up     / Move_Forward
+		{ P_DOWN,     0xd0 },  // Down arrow : menu down   / Move_Backward
+		{ P_LEFT,     0xcb },  // Left arrow : menu left   / Turn_Left
+		{ P_RIGHT,    0xcd },  // Right arrow: menu right  / Turn_Right
+		{ P_CROSS,    0x1c },  // Enter      : menu confirm / Inventory
+		{ P_CIRCLE,   0x01 },  // Escape     : menu back / open menu
+		{ P_START,    0x01 },  // Escape     : open menu
+		{ P_SELECT,   0x0f },  // Tab        : Map
+		{ P_SQUARE,   0x39 },  // Space      : Open/Use
+		{ P_TRIANGLE, 0x1e },  // A          : Jump
+		{ P_R1,       0x1d },  // Left Ctrl  : Fire
+		{ P_R2,       0x1d },  // Left Ctrl  : Fire
+		{ P_L1,       0x2a },  // Left Shift : Run (hold)
+		{ P_L2,       0x2c },  // Z          : Crouch
+	};
+	static unsigned char prevsc[256];
+	unsigned char want[256];
+	unsigned now = ps2pad_btns();
+	int i;
+
+	memset(want, 0, sizeof(want));
+	for (i = 0; i < (int)(sizeof(map)/sizeof(map[0])); i++)
+		if (now & map[i].mask) want[map[i].sc] = 1;   // OR buttons sharing a key
+
+	for (i = 0; i < (int)(sizeof(map)/sizeof(map[0])); i++) {
+		int sc = map[i].sc;
+		if (want[sc] == prevsc[sc]) continue;          // no edge (or already sent)
+		prevsc[sc] = want[sc];
+		keystatus[sc] = want[sc] ? 1 : 0;
+		keyfifo[keyfifoend] = sc;
+		keyfifo[(keyfifoend+1)&(KEYFIFOSIZ-1)] = want[sc] ? 1 : 0;
+		keyfifoend = ((keyfifoend+2)&(KEYFIFOSIZ-1));
+	}
+}
+#endif
+
 // handleevents() -- process the SDL message queue
 //   returns !0 if there was an important event worth checking (like quitting)
 //
@@ -1427,6 +1481,10 @@ int handleevents(void)
 				break;
 		}
 	}
+
+#if defined(_EE) || defined(__PS2__)
+	ps2_pad_inject();   // fold PS2 DualShock state into the key queue
+#endif
 
 	sampletimer();
 	startwin_idle(NULL);

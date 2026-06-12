@@ -1,5 +1,46 @@
 # Progress log
 
+## 2026-06-12 (cont.) — JFDuke3D base: **boots to the main menu on PS2**, DualShock input
+
+Second base switch — and the one that worked. Chocolate Duke3D (below) dead-ended
+on its **VESA-BIOS palette** path (`VBE_setPalette`): there is no VESA on a PS2, so
+the screen stayed black after the intro. Rebased onto **JFDuke3D**, whose jfbuild
+**baselayer** lets the *engine* own the palette (`curpalettefaded`) and asks the
+platform only to present a finished 8-bit frame — a handoff a console can actually
+implement. See `PORTING.md` for the architecture.
+
+The whole stack now runs on PS2, verified in PCSX2 (`emulog.txt`):
+
+- **Boot/IOP:** `libSDL2main`'s PS2 `main()` does the IOP reset + SBV patches, then
+  calls `SDL_main` — we rename `sdlayer2.c`'s `main` (`-Dmain=SDL_main`) so cdfs can
+  load.
+- **Filesystem:** jfbuild's `Bopen/Bread/Blseek/Bclose` routed to `ps2_fileio.c`
+  (fio over `cdfs.irx`, tagged fds, looped sector reads). `DUKE3D.GRP` (Atomic 1.5)
+  opens; `duke3d.cfg`, `PALETTE.DAT`, the CON scripts and ART all load off the disc.
+- **Video:** palette → ART → `setvideomode` 320×200 (8-bit) → SDL2/gsKit (NTSC
+  640×448). **The Duke Nukem 3D main menu renders** — no black screen.
+- **Input:** SDL2's PS2 port ships no joystick backend, so `ps2_pad.c` reads the
+  DualShock with **libpad** and `sdlayer2.c`'s `handleevents()` injects BUILD key
+  events (`keystatus[]`/`keyfifo[]`). One map serves menus *and* gameplay, modelled
+  on ps2quake's `IN_PadButtons` (D-pad = arrows/move-turn, X = Enter, O/Start = Esc,
+  R1/R2 = Fire, △ = Jump, □ = Open, L1 = Run, L2 = Crouch, Select = Map). Pad init is
+  hang-proof: no busy-wait (that bit us with `mtapInit`); DualShock mode is locked
+  lazily once the pad is first stable.
+
+The "`Demo demo1.dmo is of an incompatible version (117)`" line is expected — the
+Atomic GRP's attract demos are the original engine's format; JFDuke3D skips them.
+
+### Next
+- **Audio** — native audsrv driver for jfaudiolib (MultiVoc → feed thread →
+  `audsrv_play_audio`, like ps2quake's `snd_ps2.c`), replacing `driver_nosound`.
+- **Analog sticks** — wire the DualShock sticks into jfmact's CONTROL axes.
+- **In-game** — start an episode; iterate the 3D world on hardware.
+
+---
+
+_Everything below is the earlier **icculus → Chocolate** history (superseded by the
+JFDuke3D base above; kept as a log)._
+
 ## 2026-06-12 (cont.) — BASE SWITCH to Chocolate Duke3D; whole tree compiles (`3180e29`)
 
 Switched the project base from the icculus repo to **Chocolate Duke3D**
