@@ -71,6 +71,16 @@ void RTS_AddFile (char  *filename)
 // read the entire file in
 //      FIXME: shared opens
 
+#ifdef PLATFORM_PS2
+   /* RTS (taunt sounds) is optional; SafeOpenRead would fatally Error() if the
+      file is absent. Probe first and skip gracefully. */
+   {
+       int probe = open(filename, O_RDONLY);
+       if (probe < 0) { printf("RTS: '%s' not found, skipping taunts.\n", filename); return; }
+       close(probe);
+   }
+#endif
+
    handle = SafeOpenRead( filename, filetype_binary );
 
    startlump = numlumps;

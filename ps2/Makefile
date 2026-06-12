@@ -18,7 +18,7 @@ ENG_SRC  = $(filter-out display.c mmulti.c multi.c, $(notdir $(wildcard $(ENG)/*
 # Game: all top-level TUs (audiolib/ and midi/ are replaced by dummy_audiolib.c).
 GAME_SRC = $(notdir $(wildcard $(GAME)/*.c))
 # Our PS2 platform layer.
-PLAT_SRC = ps2_display.c ps2_input.c ps2_pad.c ps2_fileio.c ps2_audio_stub.c
+PLAT_SRC = ps2_display.c ps2_input.c ps2_pad.c ps2_fileio.c ps2_audio_stub.c ps2_bootscr.c
 
 EE_OBJS = $(addprefix $(OBJDIR)/, $(ENG_SRC:.c=.o) $(GAME_SRC:.c=.o) $(PLAT_SRC:.c=.o))
 
@@ -30,7 +30,7 @@ EE_INCS    += -I$(ENG) -I$(GAME) -I$(PLAT) -I$(PLAT)/sdl_stub \
 EE_LDFLAGS += -L$(GSKIT)/lib -L$(PS2SDK)/ports/lib
 
 EE_LIBS = -lgskit -ldmakit -lgraph -ldma \
-          -lps2_drivers -lpatches -lfileXio -lpad \
+          -lps2_drivers -lpatches -lfileXio -lpad -ldebug \
           -lc -lkernel
 
 all: $(EE_BIN)

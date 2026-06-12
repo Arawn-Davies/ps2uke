@@ -25,10 +25,12 @@
    Normally SDL2main does this; we don't link SDL. Called first thing in main(). */
 void ps2_early_init(void)
 {
+    extern void BootScr_Begin(void);
     static int done = 0;
     if (done) return;
     done = 1;
 
+    BootScr_Begin();           /* on-screen boot log until gsKit takes the GS */
     SifInitRpc(0);
     while (!SifIopReset("", 0)) { }
     while (!SifIopSync()) { }

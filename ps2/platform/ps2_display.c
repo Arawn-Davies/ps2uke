@@ -46,8 +46,10 @@ void _handle_events(void);             /* in ps2_input.c */
 
 static void ps2_video_init(int32_t w, int32_t h)
 {
+    extern void BootScr_End(void);
     if (gsGlobal) return;
 
+    BootScr_End();             /* hand the GS over from libdebug to gsKit */
     gsGlobal = gsKit_init_global();
     gsGlobal->Mode       = GS_MODE_NTSC;
     gsGlobal->Interlace  = GS_INTERLACED;
