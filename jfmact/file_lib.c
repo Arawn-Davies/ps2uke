@@ -43,6 +43,17 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "util_lib.h"
 #include "cache1d.h"
 
+#if defined(_EE) || defined(__PS2__)
+/* This file opens via openfrompath (Bopen -> cdfs) but reads/closes with raw
+   POSIX read()/close(), which don't know the tagged cdfs fd -> reads fail and
+   SafeClose fatally Error()s. Route the raw I/O through the cdfs shim too.
+   (After the system includes above so the declarations aren't macro-mangled.) */
+#define read   Bread
+#define close  Bclose
+#define lseek  Blseek
+#define write  Bwrite
+#endif
+
 #ifndef O_BINARY
 #define  O_BINARY 0
 #endif
