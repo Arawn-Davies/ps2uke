@@ -78,7 +78,19 @@ int ps2_bopen(const char *path, int flags, ...)
 int ps2_bread(int fd, void *buf, int len)
 {
     if (fd & PS2_FIO_TAG)
-        return fioRead(fd & ~PS2_FIO_TAG, buf, len);
+    {
+        /* fioRead over cdfs can return short (sector-sized) reads; loop so the
+           caller gets the full request (the engine's kread expects exact). */
+        int rfd = fd & ~PS2_FIO_TAG, total = 0;
+        char *p = (char *) buf;
+        while (total < len)
+        {
+            int n = fioRead(rfd, p + total, len - total);
+            if (n <= 0) break;
+            total += n;
+        }
+        return total;
+    }
     return read(fd, buf, len);
 }
 

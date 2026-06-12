@@ -11,6 +11,18 @@
 #include "cache1d.h"
 #include "pragmas.h"
 
+#if defined(_EE) || defined(__PS2__)
+/* kread() reads GRP contents with raw read()/lseek(), but the GRP fd is a tagged
+   cdfs handle (opened via Bopen) -> raw I/O fails -> truncated reads (e.g.
+   PALETTE.DAT). Route the raw I/O through the cdfs shim too. <unistd.h> first so
+   the declarations aren't macro-mangled. */
+#include <unistd.h>
+#define read   Bread
+#define lseek  Blseek
+#define close  Bclose
+#define write  Bwrite
+#endif
+
 #ifdef WITHKPLIB
 #include "kplib.h"
 
