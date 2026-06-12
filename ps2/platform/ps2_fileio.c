@@ -16,6 +16,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <fileio.h>             /* fioOpen/fioRead/fioLseek/fioClose, FIO_O_RDONLY */
+#include <sbv_patches.h>        /* sbv_patch_enable_lmb (load IRX from EE buffer) */
 #include <ps2_cdfs_driver.h>    /* init_cdfs_driver (libps2_drivers) */
 
 /* High bit tags a descriptor as fio-owned (vs a newlib POSIX fd). */
@@ -31,6 +32,12 @@ static void ensure_cdfs(void)
     static int inited = 0;
     if (inited) return;
     inited = 1;
+    /* ps2_drivers loads the embedded cdfs.irx via SifExecModuleBuffer, which
+       needs load-module-from-buffer enabled first. SDL2main reset the IOP but
+       didn't apply these, so without them init_cdfs_driver() returns 0 yet the
+       'cdfs' device never registers ("Unknown device 'cdfs'"). */
+    sbv_patch_enable_lmb();
+    sbv_patch_disable_prefix_check();
     printf("cdfs: init_cdfs_driver() = %d\n", (int) init_cdfs_driver());
     fflush(stdout);
 }
