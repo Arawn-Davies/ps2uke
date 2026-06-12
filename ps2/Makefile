@@ -51,6 +51,11 @@ EE_LIBS = -lSDL2main -lSDL2 -lps2_drivers \
 
 all: $(EE_BIN)
 
+# sdlayer2's main() must be SDL_main so libSDL2main's PS2 entry (which does the
+# IOP reset + sbv_patch_enable_lmb, needed for cdfs.irx) becomes the real main().
+$(OBJDIR)/jfb_sdlayer2.o: $(JFB)/sdlayer2.c | $(OBJDIR)
+	$(EE_C_COMPILE) -Dmain=SDL_main -c $< -o $@
+
 $(OBJDIR)/jfb_%.o:  $(JFB)/%.c  | $(OBJDIR)
 	$(EE_C_COMPILE) -c $< -o $@
 $(OBJDIR)/game_%.o: $(GAME)/%.c | $(OBJDIR)
