@@ -11,7 +11,7 @@
 #include "platform.h"
 
 /* set these in your _platform_init() implementation. */
-int _argc;
+int32_t _argc;
 char  **_argv;
 
 /* !!! gads, look at all the namespace polution... */

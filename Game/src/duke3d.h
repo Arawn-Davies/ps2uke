@@ -71,6 +71,12 @@ Prepared for public release: 03/21/2003 - Charlie Wiederhold, 3D Realms
 #include "dukeunix.h"
 #endif
 
+#if PLATFORM_PS2
+/* PS2 reuses the Unix DOS-replacement defs: find_t, STUBBED, printchrasm,
+   the mkdir(X) macro, Z_AvailHeap, ... (newlib has the POSIX headers). */
+#include "dukeunix.h"
+#endif
+
 #if PLATFORM_MACOSX
 #include "dukeunix.h"
 #endif

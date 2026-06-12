@@ -8082,7 +8082,7 @@ void findGRPToUse(char * groupfilefullpath){
 #ifdef __linux__
         if (dukeGRP_Match(dirEntry->d_name, _D_EXACT_NAMLEN(dirEntry)))
 #else
-        if (dukeGRP_Match(dirEntry->d_name,dirEntry->d_namlen))
+        if (dukeGRP_Match(dirEntry->d_name,strlen(dirEntry->d_name)))
 #endif
         {
             sprintf(groupfilefullpath,"%s",dirEntry->d_name);

@@ -1,7 +1,9 @@
 #ifndef _INCLUDE_PLATFORM_H_
 #define _INCLUDE_PLATFORM_H_
 
-#if (defined PLATFORM_WIN32)
+#if (defined PLATFORM_PS2)
+    #include "ps2_compat.h"
+#elif (defined PLATFORM_WIN32)
     #include "win32_compat.h"
 #elif (defined PLATFORM_UNIX)
     #include "unix_compat.h"

@@ -9,6 +9,10 @@
 #ifndef Duke3D_global_h
 #define Duke3D_global_h
 
+#ifdef PLATFORM_PS2
+#include <stdint.h>           /* global.h uses int32_t before the compat header */
+#endif
+
 void FixFilePath(char  *filename);
 int FindDistance3D(int ix, int iy, int iz);
 void Shutdown(void);
@@ -39,6 +43,12 @@ void Shutdown(void);
 #else
 // Defined in endian.h
 // #define BYTE_ORDER LITTLE_ENDIAN
+#endif
+#endif
+
+#ifdef PLATFORM_PS2
+#ifndef BYTE_ORDER
+#define BYTE_ORDER 1234       /* EE is little-endian */
 #endif
 #endif
 

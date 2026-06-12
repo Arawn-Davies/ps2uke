@@ -195,7 +195,7 @@ unsigned int crc32(uint8_t  *buf, unsigned int length)
 	return(crc32_update(buf, length, initial_crc));
 }
 
-unsigned int crc32_update(uint8_t  *buf, unsigned int length, unsigned int crc_to_update)
+uint32_t crc32_update(uint8_t *buf, uint32_t length, uint32_t crc_to_update)
 {
 	unsigned int crc32_table[256];
     
@@ -353,7 +353,7 @@ int32_t kread(int32_t handle, void *buffer, int32_t leng){
     
 }
 
-int kread16(int32_t handle, short *buffer){
+int32_t kread16(int32_t handle, short *buffer){
     if (kread(handle, buffer, 2) != 2)
         return(0);
     
@@ -361,7 +361,7 @@ int kread16(int32_t handle, short *buffer){
     return(1);
 }
 
-int kread32(int32_t handle, int32_t *buffer){
+int32_t kread32(int32_t handle, int32_t *buffer){
     if (kread(handle, buffer, 4) != 4)
         return(0);
     
@@ -369,7 +369,7 @@ int kread32(int32_t handle, int32_t *buffer){
     return(1);
 }
 
-int kread8(int32_t handle, uint8_t  *buffer){
+int32_t kread8(int32_t handle, uint8_t  *buffer){
     if (kread(handle, buffer, 1) != 1)
         return(0);
     
@@ -698,7 +698,7 @@ void dfwrite(void *buffer, size_t dasizeof, size_t count, FILE *fil)
 
 
 int SafeFileExists ( const char  * _filename );
-int32_t TCkopen4load(const char  *filename, int readfromGRP)
+int32_t TCkopen4load(const char *filename, int32_t readfromGRP)
 {
 	char  fullfilename[512];
 	int32_t result = 0;

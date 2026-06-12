@@ -52,8 +52,12 @@ typedef uint16_t            uint16;
 typedef uint16                  word;
 typedef short int               int16;
 
-typedef unsigned int           uint32;
-typedef int                    int32;
+/* Align int32/uint32 with <stdint.h> so they don't clash with the engine's
+   int32_t use. On the EE n32 ABI int32_t is `long` (not `int`); they're both
+   32-bit, so struct layouts and printf are unaffected, but the C types differ
+   and the original `typedef int int32` collided everywhere. */
+typedef uint32_t               uint32;
+typedef int32_t                int32;
 typedef uint32                  dword;
 
 typedef int32                   fixed;
