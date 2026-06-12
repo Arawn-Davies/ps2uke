@@ -1,45 +1,65 @@
-# ps2uke -- PlayStation 2 build of Chocolate Duke3D.
+# ps2uke -- PlayStation 2 build of JFDuke3D (jfbuild software renderer + SDL2).
 #
-# Builds the engine + game with our PS2 platform layer (gsKit video, cdfs file
-# I/O, libpad input) replacing display.c/SDL. main() is Game/src/game.c.
+# RENDERTYPE=SDL, USE_OPENGL=0, USE_POLYMOST=0: the classic 8-bit software
+# engine driven by jfbuild's SDL2 baselayer (sdlayer2.c). PS2's SDL2 renders
+# through gsKit and libSDL2main does the IOP/SIF bring-up + calls main().
 #
-#   ../build.sh         (from repo root)   or   make   (inside the image)
+#   ../build.sh        (from repo root)   or   make   (inside the image)
 
 EE_BIN = ps2uke.elf
 
-ENG    = ../Engine/src
-GAME   = ../Game/src
+JFB    = ../jfbuild/src
+JFBINC = ../jfbuild/include
+GAME   = ../src
+MACT   = ../jfmact
+AUD    = ../jfaudiolib/src
+AUDINC = ../jfaudiolib/include
 PLAT   = platform
 OBJDIR = build
 
-# Engine: skip display.c (-> ps2_display.c) and the real multiplayer
-# mmulti.c/multi.c (-> dummy_multi.c).
-ENG_SRC  = $(filter-out display.c mmulti.c multi.c, $(notdir $(wildcard $(ENG)/*.c)))
-# Game: all top-level TUs (audiolib/ and midi/ are replaced by dummy_audiolib.c).
-GAME_SRC = $(notdir $(wildcard $(GAME)/*.c))
-# Our PS2 platform layer.
-PLAT_SRC = ps2_display.c ps2_input.c ps2_pad.c ps2_fileio.c ps2_audio_stub.c ps2_bootscr.c
+# jfbuild engine (software-only) + SDL2 layer.
+JFB_SRC  = a-c asmprot baselayer cache1d compat crc32 defs engine kplib \
+           mmulti_null osd pragmas scriptfile textfont talltextfont \
+           smalltextfont sdlayer2 startwin_stub
+# JFDuke3D game (app_main is in game.c; skip editor/desktop-launcher TUs).
+GAME_SRC = game actors config gamedef global grpscan menues osdcmds osdfuncs \
+           player premap rts sector sounds version
+# Input/control + math helpers.
+MACT_SRC = animlib control file_lib keyboard mathutil mouse scriplib util_lib
+# Audio: silent (driver_nosound) for now; no vorbis/flac (HAVE_* off).
+AUD_SRC  = asssys cd drivers fx_man midi mix mixst multivoc music pitch \
+           driver_nosound
+# Our PS2 glue: cdfs/GRP file shim.
+PLAT_SRC = ps2_fileio ps2_stubs
 
-EE_OBJS = $(addprefix $(OBJDIR)/, $(ENG_SRC:.c=.o) $(GAME_SRC:.c=.o) $(PLAT_SRC:.c=.o))
+EE_OBJS = $(addprefix $(OBJDIR)/jfb_,  $(addsuffix .o,$(JFB_SRC)))  \
+          $(addprefix $(OBJDIR)/game_, $(addsuffix .o,$(GAME_SRC))) \
+          $(addprefix $(OBJDIR)/mact_, $(addsuffix .o,$(MACT_SRC))) \
+          $(addprefix $(OBJDIR)/aud_,  $(addsuffix .o,$(AUD_SRC)))  \
+          $(addprefix $(OBJDIR)/plat_, $(addsuffix .o,$(PLAT_SRC)))
 
-# -std=gnu99: GCC 15 defaults to C23 (reserves `bool` etc.). -fpermissive +
-# -fcommon: this 1996 code puns int<->pointer and has tentative defs in headers.
-EE_CFLAGS  += -DPLATFORM_PS2 -std=gnu99 -fpermissive -fcommon -fno-strict-aliasing
-EE_INCS    += -I$(ENG) -I$(GAME) -I$(PLAT) -I$(PLAT)/sdl_stub \
-              -I$(GSKIT)/include -I$(PS2SDK)/ports/include
-EE_LDFLAGS += -L$(GSKIT)/lib -L$(PS2SDK)/ports/lib
+EE_CFLAGS  += -std=gnu99 -D_EE -DUSE_POLYMOST=0 -DUSE_OPENGL=0 -fno-strict-aliasing
+EE_INCS    += -I$(GAME) -I$(JFBINC) -I$(MACT) -I$(AUDINC) -I$(PLAT) \
+              -I$(PS2SDK)/ports/include/SDL2 -I$(PS2SDK)/ports/include
+EE_LDFLAGS += -L$(PS2SDK)/ports/lib -L$(GSKIT)/lib
 
-EE_LIBS = -lgskit -ldmakit -lgraph -ldma \
-          -lps2_drivers -lpatches -lfileXio -lpad -ldebug \
-          -lc -lkernel
+# SDL2 (+ main = PS2 entry/IOP init) over gsKit; ps2_drivers loads cdfs.irx.
+EE_LIBS = -lSDL2main -lSDL2 -lps2_drivers \
+          -lgskit -ldmakit -ldraw -lgraph -lmath3d -lpacket2 -ldma \
+          -ldebug -lfileXio -lpatches -lpad \
+          -lm -lc -lkernel
 
 all: $(EE_BIN)
 
-$(OBJDIR)/%.o: $(ENG)/%.c  | $(OBJDIR)
+$(OBJDIR)/jfb_%.o:  $(JFB)/%.c  | $(OBJDIR)
 	$(EE_C_COMPILE) -c $< -o $@
-$(OBJDIR)/%.o: $(GAME)/%.c | $(OBJDIR)
+$(OBJDIR)/game_%.o: $(GAME)/%.c | $(OBJDIR)
 	$(EE_C_COMPILE) -c $< -o $@
-$(OBJDIR)/%.o: $(PLAT)/%.c | $(OBJDIR)
+$(OBJDIR)/mact_%.o: $(MACT)/%.c | $(OBJDIR)
+	$(EE_C_COMPILE) -c $< -o $@
+$(OBJDIR)/aud_%.o:  $(AUD)/%.c  | $(OBJDIR)
+	$(EE_C_COMPILE) -c $< -o $@
+$(OBJDIR)/plat_%.o: $(PLAT)/%.c | $(OBJDIR)
 	$(EE_C_COMPILE) -c $< -o $@
 
 $(OBJDIR):
