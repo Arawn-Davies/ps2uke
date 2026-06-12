@@ -1,5 +1,36 @@
 # Progress log
 
+## 2026-06-12 (cont.) — Stage 5: cdfs/GRP filesystem (`47a6d48`)
+
+Real Duke data now loads off the boot disc. `cache1d.c`'s POSIX `open/read/lseek/
+close` are redirected (4-line splice, after its system includes) to a fio-backed
+shim `ps2_fileio.c`: cdfs.irx is a legacy ioman device newlib's `open()` can't
+reach and that rejects `O_RDONLY(0)`, so read-only disc opens go through
+`fioOpen`/`fioRead`/`fioLseek` (`FIO_O_RDONLY`) with a tagged fd; bare filenames
+resolve to `cdfs:/`. (Safe because cache1d keeps group-vs-external in `filegrp[]`,
+not in the fd bits.)
+
+`ps2_main.c` is the stage-5 test: `init_cdfs_driver()` →
+`initgroupfile("cdfs:/DUKE3D.GRP")` → `initengine()` (loads `PALETTE.DAT` from
+the GRP) → render the colour bars through the engine's **real palette**.
+
+**ISO build:** `./make_iso.sh [grp-dir]` stages `SYSTEM.CNF` + `PS2UKE.ELF` +
+`DUKE3D.GRP` into a bootable ISO9660 (`xorriso`, added to the Dockerfile).
+Defaults to the GRP at `/mnt/c/Users/azama/Downloads/duke3d`. Output:
+`dist/ps2uke.iso` (~47 MB; never committed — contains the copyrighted GRP).
+
+**Verified:** compiles + links clean into a PS2 ELF, ISO builds (root entries
+`DUKE3D.GRP`/`PS2UKE.ELF`/`SYSTEM.CNF`). **Runtime/visual needs PCSX2 or hardware
+(not auto-launched).** To test: `./build.sh && ./make_iso.sh`, then boot
+`dist/ps2uke.iso` in PCSX2. Expected console log: `initgroupfile(...) = <fd>`
+(>= 0 means the GRP opened), then colour bars in Duke's real palette. If
+`initgroupfile` returns -1, the GRP isn't being found on the disc.
+
+### Next: real Duke pixels, then the game loop
+With the GRP readable, draw an actual ART tile (`loadpics` + `rotatesprite`,
+e.g. the loading/title screen), then start wiring the Duke game objects
+(`source/*.c`) and the PS2 pad input.
+
 ## 2026-06-12 (cont.) — Stage 4: gsKit framebuffer present path (`d5dce24`)
 
 `ps2_driver.c` now brings up gsKit and presents the engine's 8-bit framebuffer:
