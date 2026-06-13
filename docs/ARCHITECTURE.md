@@ -163,28 +163,39 @@ crucial property that makes this portable: **the engine owns the palette**
 (`curpalettefaded`) — the platform never pokes hardware palette registers (that's
 exactly what dead-ended the Chocolate attempt on the non-existent VESA BIOS).
 
-`setvideomode()` (`sdlayer2.c:808`) builds an SDL window + **renderer** + a
-streaming **texture** + a 32-bit surface. Each frame, `showframe()`
-(`sdlayer2.c:1064`) expands the 8-bit frame through the palette into the locked
-32-bit texture and presents it. On the PS2 SDL2 port the renderer **is** gsKit, so
-the only PS2-specific magic is "SDL2 happens to be backed by the GS."
+On PS2 we **bypass SDL2's renderer entirely** and drive the GS directly
+(`ps2_gs.c`). `setvideomode()` (`sdlayer2.c:808`) skips `SDL_CreateRenderer` and
+calls `ps2gs_init()` instead; each frame `showframe()` (`sdlayer2.c:1064`) hands
+the raw 8-bit frame to `ps2gs_present()`, which uploads it as a **GS `PSMT8`
+texture** with a **`CT32` CLUT** built from `curpalettefaded`. The **Graphics
+Synthesizer does the indexed→RGB expansion *and* the 320×200→640×448 upscale in
+hardware** — the EE never touches a pixel after the engine finishes drawing.
+
+This was the single biggest speedup. SDL2's renderer made the EE expand 8→32 and
+push a 256 KB RGBA texture *every frame* (slow even on a static logo). Owning the
+GS is safe because SDL2's PS2 port only calls `gsKit_init_global` from its
+*renderer* — which we skip — so nothing contends for the GS, and SDL2's window +
+display/mode enumeration stay intact.
 
 ```mermaid
 flowchart LR
-    A["engine draws<br/>8-bit indexed frame<br/>(frameplace, bytesperline)"] --> B["showframe()"]
-    P["curpalettefaded<br/>256-entry palette"] --> B
-    B --> C["expand index → 32-bit RGBA<br/>into locked SDL texture"]
-    C --> D["SDL_RenderCopy → SDL_RenderPresent<br/>(vsync)"]
-    D --> E["SDL2 PS2 render driver = gsKit"]
-    E --> F["Graphics Synthesizer<br/>scales 320×200 → NTSC 640×448"]
+    A["engine draws<br/>8-bit indexed frame<br/>(frameplace)"] --> B["showframe()"]
+    B --> PS["ps2_gs.c: ps2gs_present()"]
+    P["curpalettefaded<br/>256-entry palette"] --> C["CSM1-swizzled CT32 CLUT"]
+    PS --> T["upload PSMT8 texture (8-bit)"]
+    C --> T
+    T --> GS["Graphics Synthesizer"]
+    GS --> E["indexed→RGB expand<br/>+ scale 320×200 → 640×448<br/>(all in hardware)"]
+    E --> F["vsync flip<br/>(gsKit_sync_flip)"]
     F --> G["TV / PCSX2"]
-    PAL2["setpalette()"] -. updates .-> P
 ```
 
-- **Resolution:** the game requests 320×200×8 (`duke3d.cfg`); the GS upscales to
+- **Resolution:** the engine renders 320×200×8; the GS upscales the T8 texture to
   the NTSC 640×448 interlaced field.
-- **Where the expansion runs:** on the EE, in `showframe()` — cheap, and it keeps
-  the GS side a plain 32-bit blit.
+- **Where the expansion runs:** on the **GS, in hardware** (via the CLUT) — not the
+  EE. The EE only `memcpy`s the 8-bit frame into the texture.
+- **Frame cap:** `gsKit_sync_flip()` waits for vsync, so the present is locked to
+  ~60 fps (the NTSC field rate).
 
 ---
 

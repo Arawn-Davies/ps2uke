@@ -5,18 +5,22 @@
 the PS2, built with the [ps2dev](https://github.com/ps2dev/ps2dev) toolchain and
 booted from an ISO in PCSX2 or on real hardware.
 
-> **Status (2026-06-12):** boots to the **Duke Nukem 3D main menu** on PS2 —
-> cdfs → `DUKE3D.GRP` → palette → ART → `setvideomode` 320×200 → SDL2/gsKit.
-> DualShock input works (libpad). **Audio is in progress** (currently silent).
+> **Status (2026-06-13): playable.** Boots through cdfs → `DUKE3D.GRP` → palette →
+> ART to the menu and **into levels at a vsync-capped 60 fps**. The engine's 8-bit
+> frame is handed to the GS as a **`PSMT8` texture + `CT32` CLUT**, so the Graphics
+> Synthesizer does the indexed→RGB palette-expand *and* the 320×200→640×448 upscale
+> **in hardware** — the EE just feeds it. DualShock input works (libpad). **Audio is
+> the remaining piece** (SFX/music — currently silent).
 
 ```mermaid
 graph LR
-    GAME["Duke game<br/>src/"] --> ENGINE["BUILD engine<br/>jfbuild/"]
-    ENGINE --> SEAM["sdlayer2.c<br/>(SDL2 baselayer)"]
-    SEAM --> GS["libSDL2 → gsKit → GS"]
+    GAME["Duke game<br/>src/"] --> ENGINE["BUILD engine<br/>jfbuild/ (8-bit software)"]
+    ENGINE --> SEAM["sdlayer2.c<br/>baselayer seam"]
+    SEAM --> GSPRES["ps2_gs.c<br/>8-bit frame → GS T8 + CLUT"]
+    GSPRES --> GS["Graphics Synthesizer<br/>hardware palette-expand + upscale"]
     GAME -->|"Bopen"| FS["ps2_fileio.c<br/>cdfs / GRP"]
     SEAM -->|"handleevents"| PAD["ps2_pad.c<br/>DualShock (libpad)"]
-    GAME -.->|"planned"| AUD["jfaudiolib → audsrv"]
+    GAME -.->|"next"| AUD["jfaudiolib → audsrv"]
 ```
 
 ## Build

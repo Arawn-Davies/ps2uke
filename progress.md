@@ -1,5 +1,32 @@
 # Progress log
 
+## 2026-06-13 — GS hardware present (T8 + CLUT): **playable in-game at ~60 fps** (`2f9aebd`)
+
+The render path was the bottleneck, and it's gone. `showframe()` no longer makes
+the EE expand the 8-bit frame to 32-bit and push a 256 KB RGBA upload through
+SDL2's renderer every frame — the cost that made *even the 3D Realms logo* crawl.
+Instead the raw 8-bit frame goes up as a GS **PSMT8 texture + CT32 CLUT**
+(`ps2_gs.c`), and the **Graphics Synthesizer does the indexed→RGB expansion and the
+320×200→640×448 upscale in hardware**.
+
+Owning the GS was a small change, not a rewrite: `nm` on libSDL2 showed
+`gsKit_init_global` is referenced only by SDL2's *renderer* (`SDL_render_ps2.c`),
+never by its video/window driver — so skipping `SDL_CreateRenderer` and bringing up
+our own gsKit leaves SDL2's window + display enumeration intact, with nothing
+contending for the GS.
+
+Result, verified in PCSX2: the logo, menu, and **in-game 3D world all run fast** —
+a locked ~60 fps (`gsKit_sync_flip` waits for vsync). Duke is now playable end to
+end with the DualShock. The renderer TUs (`a-c.c`, `engine.c`) also build at
+`-O3 -funroll-loops`.
+
+The takeaway (from a GT3-vs-Duke aside): the EE *software* path is slow on both the
+emulator and real silicon; the fix is to do as much as possible on the **GS** —
+exactly where a GS-bound title like Gran Turismo 3 stays at a locked 60.
+
+### Next
+- **Audio** — SFX via audsrv (a jfaudiolib PCM driver), then MIDI music.
+
 ## 2026-06-12 (cont.) — JFDuke3D base: **boots to the main menu on PS2**, DualShock input
 
 Second base switch — and the one that worked. Chocolate Duke3D (below) dead-ended

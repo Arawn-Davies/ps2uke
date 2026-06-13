@@ -86,9 +86,9 @@ copyrighted to 3D Realms and must be user-supplied at runtime.
 
 - [x] **Base** — JFDuke3D (engine + game + jfmact + jfaudiolib) compiles & links for PS2.
 - [x] **Filesystem** — cdfs/GRP off the boot disc (fio shim); `DUKE3D.GRP` (Atomic 1.5) loads.
-- [x] **Video** — boots through palette → ART → `setvideomode` 320×200 → SDL2/gsKit; the **main menu renders**.
-- [x] **Input** — DualShock via libpad → BUILD keys; menus navigable.
-- [ ] **Audio** — native audsrv driver for jfaudiolib (replace `driver_nosound`).
+- [x] **Video** — **GS hardware present** (`ps2_gs.c`): the 8-bit frame goes up as a `PSMT8` texture + `CT32` CLUT and the GS does the palette-expand + 320×200→640×448 upscale. Locked ~60 fps.
+- [x] **Input** — DualShock via libpad → BUILD keys; menus *and* gameplay.
+- [x] **Playable** — boots end to end into levels and runs the 3D world at speed.
+- [ ] **Audio** — native audsrv driver for jfaudiolib (SFX), then MIDI music (replace `driver_nosound`).
 - [ ] **Analog sticks** — left stick move/strafe, right stick look (jfmact CONTROL axes).
-- [ ] **In-game** — start an episode and run the 3D world; iterate runtime.
-- [ ] **Polish** — EE/GS performance, save games, faster cdfs (skip the loose-file probe).
+- [ ] **Polish** — `a-ee.s` rasterizer / SPRAM, save games, faster cdfs (skip the loose-file probe).
