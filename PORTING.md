@@ -59,25 +59,30 @@ Everything PS2-specific lives in `ps2/platform/` and a few guarded
 | Concern              | How it works on PS2                                                                  |
 |----------------------|-------------------------------------------------------------------------------------|
 | **Entry / IOP boot** | `libSDL2main`'s PS2 `main()` resets the IOP + applies SBV patches, then calls `SDL_main`. We make `sdlayer2.c`'s `main` become `SDL_main` (`-Dmain=SDL_main`) so that bring-up runs first. |
-| **Video**            | SDL2-over-gsKit presents the engine's 8-bit frame; `setvideomode`/`showframe` drive it. Engine owns the palette. |
-| **Filesystem**       | GRP + all data sit on the boot disc, reached through `cdfs.irx` — a *legacy ioman* device `open()` can't see. jfbuild's `Bopen/Bread/Blseek/Bclose` are routed (in `compat.h`) to `ps2_fileio.c`, which uses the **fio** API (`fioOpen`, `FIO_O_RDONLY`) with tagged fds and loops short sector reads. cdfs is brought up lazily (`sbv_patch_enable_lmb` + `init_cdfs_driver`). |
-| **Input**            | SDL2's PS2 port exposes **no** joystick backend, so `ps2_pad.c` reads the DualShock with **libpad** directly and `sdlayer2.c`'s `handleevents()` injects BUILD key events through the same `keystatus[]`/`keyfifo[]` path as a keyboard. One button→key map serves menus and gameplay (modelled on ps2quake's `IN_PadButtons`). |
-| **Audio**            | A native **audsrv** driver for jfaudiolib (MultiVoc fills a buffer; a feed thread streams it to `audsrv_play_audio`, like ps2quake's `snd_ps2.c`). *In progress — currently `driver_nosound` (silent).* |
+| **Boot launcher**    | A **separate `LAUNCH.ELF`** (`ps2/launcher/`) boots first and shows a libpad/libdebug **options picker** (video mode, filter, frame cap, music), then `LoadExecPS2`'s the game, passing the choices as an argv tag (`ps2uke=v.f.c.m`) and persisting them to `mc0:`/`mc1:`. The ps2quake/ps2oom model — keeping the picker out of the game ELF avoids the `init_scr`-vs-gsKit and double-open-pad conflicts. |
+| **Video**            | gsKit presents the engine's 8-bit frame as a `PSMT8` texture + `CT32` CLUT (`ps2_gs.c`); the GS does the palette-expand + upscale in hardware. The picker selects the output mode: NTSC 480i/480p, PAL 576i/576p, or 720p (720p drops to 16-bit to fit 4 MB VRAM). Engine owns the palette. |
+| **Filesystem**       | GRP + all data sit on the boot disc, reached through `cdfs.irx` — a *legacy ioman* device `open()` can't see. jfbuild's `Bopen/Bread/Blseek/Bclose` are routed (in `compat.h`) to `ps2_fileio.c`, which uses the **fio** API (`fioOpen`, `FIO_O_RDONLY`) with tagged fds and loops short sector reads. cdfs is brought up lazily (`sbv_patch_enable_lmb` + `init_cdfs_driver`); loose-file opens for anything but the GRP/CFG fail fast to skip the slow disc probe. |
+| **Input**            | SDL2's PS2 port exposes **no** joystick backend, so `ps2_pad.c` reads the DualShock with **libpad** directly. `sdlayer2.c`'s `handleevents()` injects buttons/d-pad as BUILD key events (`keystatus[]`/`keyfifo[]`, ps2quake's `IN_PadButtons` model) **and** feeds the analog sticks into jfbuild's `joyaxis[]`; `initinput()` advertises a 4-axis pad so jfmact enables the joystick (left = strafe/move, right = turn/look, mapped in `duke3d.cfg`). |
+| **Audio**            | A native **audsrv** driver for jfaudiolib (`driver_audsrv.c`): MultiVoc fills a buffer; a feed thread streams it to `audsrv_play_audio`, like ps2quake's `snd_ps2.c`. **Music** is a software **OPL** FM synth (`ps2/opl/`, DBOPL + a MIDI→OPL sequencer); `OPL_PS2_Render` is mixed into the same feed thread, so Duke's `.MID` plays without jfaudiolib's MIDI path. |
+| **Quit**             | No "DOS" to exit to: the menu's Quit resets the IOP and `LoadExecPS2`'s `LAUNCH.ELF` (`ps2_reboot.c`), returning to the picker; fatal `gameexit()` terminates via the Exit syscall. (Plain `exit(0)` hung tearing down the IOP.) |
 | **Stubs**            | `ps2_stubs.c`: app-icon/`build_*` symbols + an `init_joystick_driver` **no-op** that dodges libps2_drivers' `mtapInit` deadlock (it spins on the unloaded `mtapman` IOP module). |
 
-cdfs/sound/IOP bring-up mirrors the proven **ps2quake** and **ps2oom** ports.
+cdfs/sound/IOP bring-up and the boot-launcher model mirror the proven **ps2quake**
+and **ps2oom** ports.
 
 ## Build & run
 
 The ps2dev toolchain runs in Docker (`Dockerfile`, image `ps2uke-dock:local`):
 
 ```sh
-./build.sh                 # make in ps2/  ->  ps2/ps2uke.elf
-./make_iso.sh [grp-dir]    # stage SYSTEM.CNF + ELF + DUKE3D.GRP + DUKE3D.CFG -> dist/ps2uke.iso
+./build.sh                 # ps2/ps2uke.elf (game) + ps2/launcher/launcher.elf
+./make_iso.sh [grp-dir]    # stage SYSTEM.CNF + LAUNCH.ELF + PS2UKE.ELF + GRP + CFG -> dist/ps2uke.iso
 ```
 
-Then boot `dist/ps2uke.iso` in PCSX2 or on hardware. (PCSX2 logs to
-`emulog.txt`; the emulator is never auto-launched from here.)
+Then boot `dist/ps2uke.iso` in PCSX2 or on hardware. The disc boots `LAUNCH.ELF`
+(the options picker) first; it chain-loads `PS2UKE.ELF`. (PCSX2 logs to
+`emulog.txt`; enable **Fast Boot** to skip the BIOS intro; the emulator is never
+auto-launched from here.)
 
 **Game data (`DUKE3D.GRP`, demos, maps) is never committed** — it stays
 copyrighted to 3D Realms and must be user-supplied at runtime.
@@ -85,11 +90,11 @@ copyrighted to 3D Realms and must be user-supplied at runtime.
 ## Status & roadmap
 
 - [x] **Base** — JFDuke3D (engine + game + jfmact + jfaudiolib) compiles & links for PS2.
-- [x] **Filesystem** — cdfs/GRP off the boot disc (fio shim); `DUKE3D.GRP` (Atomic 1.5) loads.
-- [x] **Video** — **GS hardware present** (`ps2_gs.c`): the 8-bit frame goes up as a `PSMT8` texture + `CT32` CLUT and the GS does the palette-expand + 320×200→640×448 upscale. Locked ~60 fps.
-- [x] **Input** — DualShock via libpad → BUILD keys; menus *and* gameplay.
+- [x] **Filesystem** — cdfs/GRP off the boot disc (fio shim); `DUKE3D.GRP` (Atomic 1.5) loads. Loose-file probe fast-failed → quick, quiet loads.
+- [x] **Video** — **GS hardware present** (`ps2_gs.c`): the 8-bit frame goes up as a `PSMT8` texture + `CT32` CLUT and the GS does the palette-expand + upscale. Locked ~60 fps; picker selects 480i/480p, 576i/576p or 720p.
+- [x] **Input** — DualShock via libpad: buttons/d-pad → BUILD keys (menus *and* gameplay) **+ analog sticks** → jfmact joystick axes.
 - [x] **Playable** — boots end to end into levels and runs the 3D world at speed.
 - [x] **Audio (SFX)** — MultiVoc → PS2 `audsrv` (`driver_audsrv.c`): a feed thread streams mixed divisions to `audsrv_play_audio`. Weapons/voice/explosions play.
-- [ ] **Music** — Duke's MIDI tracks need an OPL synth wired into jfaudiolib's MIDI subsystem.
-- [ ] **Analog sticks** — left stick move/strafe, right stick look (jfmact CONTROL axes).
-- [ ] **Polish** — `a-ee.s` rasterizer / SPRAM, save games, faster cdfs (skip the loose-file probe).
+- [x] **Music** — software **OPL** synth (`ps2/opl/`) renders Duke's MIDI, mixed into the audsrv feed thread.
+- [x] **Boot launcher** — separate `LAUNCH.ELF` options picker (video/filter/cap/music) with argv hand-off + memory-card persistence; quit returns to it.
+- [ ] **Polish** — `a-ee.s` rasterizer / SPRAM, save games, in-game options, USB/HDD data loading, 1080i (gsKit display setup), analog look tuning.

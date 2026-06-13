@@ -5,23 +5,27 @@
 the PS2, built with the [ps2dev](https://github.com/ps2dev/ps2dev) toolchain and
 booted from an ISO in PCSX2 or on real hardware.
 
-> **Status (2026-06-13): playable.** Boots through cdfs → `DUKE3D.GRP` → palette →
-> ART to the menu and **into levels at a vsync-capped 60 fps**. The engine's 8-bit
-> frame is handed to the GS as a **`PSMT8` texture + `CT32` CLUT**, so the Graphics
-> Synthesizer does the indexed→RGB palette-expand *and* the 320×200→640×448 upscale
-> **in hardware** — the EE just feeds it. DualShock input works (libpad), and
-> **sound effects play** through the PS2 `audsrv` module. The last piece is
-> **music** (Duke's MIDI tracks need an OPL synth).
+> **Status (2026-06-13): playable, with sound, music and a boot menu.** A separate
+> launcher ELF shows a controller-driven **options picker** (video mode, texture
+> filter, frame cap, music) and then chain-loads the game. Duke boots through cdfs →
+> `DUKE3D.GRP` → palette → ART to the menu and **into levels at a vsync-capped
+> 60 fps**: the engine's 8-bit frame is handed to the GS as a **`PSMT8` texture +
+> `CT32` CLUT**, so the Graphics Synthesizer does the indexed→RGB palette-expand
+> *and* the upscale **in hardware** — the EE just feeds it. DualShock input works
+> (d-pad/buttons **and analog sticks**, via libpad), **sound effects and OPL music**
+> play through the PS2 `audsrv` module, and the picker can select **480i / 480p /
+> 576i / 576p / 720p** output (with memory-card persistence).
 
 ```mermaid
 graph LR
+    LAUNCH["LAUNCH.ELF<br/>options picker (libpad/libdebug)"] -.->|"LoadExecPS2 + argv"| GAME
     GAME["Duke game<br/>src/"] --> ENGINE["BUILD engine<br/>jfbuild/ (8-bit software)"]
     ENGINE --> SEAM["sdlayer2.c<br/>baselayer seam"]
     SEAM --> GSPRES["ps2_gs.c<br/>8-bit frame → GS T8 + CLUT"]
     GSPRES --> GS["Graphics Synthesizer<br/>hardware palette-expand + upscale"]
     GAME -->|"Bopen"| FS["ps2_fileio.c<br/>cdfs / GRP"]
-    SEAM -->|"handleevents"| PAD["ps2_pad.c<br/>DualShock (libpad)"]
-    GAME -.->|"next"| AUD["jfaudiolib → audsrv"]
+    SEAM -->|"handleevents"| PAD["ps2_pad.c<br/>DualShock: keys + analog (libpad)"]
+    GAME -->|"FX / MUSIC"| AUD["jfaudiolib SFX + OPL music<br/>→ audsrv"]
 ```
 
 ## Build
@@ -29,10 +33,13 @@ graph LR
 The toolchain runs in Docker. With the image built (`ps2uke-dock:local`):
 
 ```sh
-./build.sh                 # make in ps2/  →  ps2/ps2uke.elf
-./make_iso.sh [grp-dir]    # stage SYSTEM.CNF + ELF + DUKE3D.GRP + duke3d.cfg
+./build.sh                 # builds ps2/ps2uke.elf (game) + ps2/launcher/launcher.elf
+./make_iso.sh [grp-dir]    # stage SYSTEM.CNF + LAUNCH.ELF + PS2UKE.ELF + GRP + cfg
                            #   →  dist/ps2uke.iso
 ```
+
+The disc boots **`LAUNCH.ELF`** (the options picker) first; it chain-loads
+`PS2UKE.ELF`. In PCSX2, enable **Fast Boot** to skip the ~14 s BIOS intro.
 
 Then boot `dist/ps2uke.iso` in PCSX2 or on hardware.
 

@@ -1,5 +1,49 @@
 # Progress log
 
+## 2026-06-13 (cont.) — OPL music, boot launcher + options picker, analog sticks, GS video modes (`4d179f0`)
+
+A big round that fills in most of the remaining gaps.
+
+**Music — OPL FM synth.** Duke's MIDI now plays. The DOSBox OPL2/OPL3 core
+(`dbopl`) + Chocolate-Doom's MIDI→OPL sequencer (`i_oplmusic`, `midifile`,
+`opl_queue`, `mus2mid`, `memio`) were lifted into `ps2/opl/`, with a small
+`opl_shim.h` + stub headers (`doomtype.h`, `i_swap.h`, `m_misc.h`, `z_zone.h`, …)
+de-coupling them from the Doom tree. The GENMIDI instrument bank is embedded
+(`demo_genmidi.c`) instead of read from a WAD lump. `playmusic()` in `sounds.c`
+hands the raw `.MID` straight to `PS2OPL_PlaySong` (bypassing jfaudiolib's MIDI
+sequencer entirely — "cut out the middleman"), and `OPL_PS2_Render` is mixed into
+the **same audsrv feed thread** as the MultiVoc SFX. Music gain is a picker option.
+
+**cdfs — fast-fail the loose-file probe.** `kopen4load` tried every asset name as a
+loose disc file first; misses made cdfs scan the whole disc and emit ~30 "Bad
+Sector Count Error" lines (~0.15 s each) before falling back to the GRP — the level-
+load lag and log spam. Our disc only carries `DUKE3D.GRP`/`.CFG` loose, so
+`ps2_fileio.c` now rejects any other loose open instantly → no scan, fast loads.
+
+**Boot launcher + options picker.** The in-game picker attempt fought the engine
+(`init_scr` vs gsKit for the GS; a second `padPortOpen` killed the controller), so
+it became a **separate `LAUNCH.ELF`** (`ps2/launcher/`, the ps2quake/ps2oom model).
+It draws a libdebug + libpad menu, then `LoadExecPS2`'s the game with the chosen
+settings in an argv tag (so they apply with no card) and persists them to
+`mc0:`/`mc1:` (`ps2_settings.c`, libmc). The game applies the tag before
+`SDL_Init`. **Quit** resets the IOP and re-launches the launcher (`ps2_reboot.c`) —
+back to the picker instead of the old `exit(0)` hang; fatal `gameexit()` now
+terminates via the Exit syscall.
+
+**GS video modes.** The picker selects NTSC 480i/480p, PAL 576i/576p, or **720p**
+(`ps2_gs.c` mode table; 720p drops to 16-bit to fit the 4 MB VRAM). 1080i was tried
+but gsKit's interlaced-DTV display setup never produces a picture on this pipeline
+(the game ran — music played — but the GS stayed black), so 720p is the ceiling.
+Frame cap (60/30) and texture filter (sharp/smooth) are picker options too.
+
+**Analog sticks.** The DualShock sticks feed jfbuild's `joyaxis[]` each frame;
+`initinput()` advertises a 4-axis pad on PS2 so jfmact enables the joystick.
+`duke3d.cfg [Controls]` maps left stick = strafe/move, right stick = turn/look.
+
+Boot delay note: the ~14 s before the picker is PCSX2's BIOS intro (fast-boot off),
+**not** our code — the emulog shows `init_cdfs_driver()` completing fast with no USB/
+dev9 stall, so USB/dev9 are left intact for future use rather than stubbed out.
+
 ## 2026-06-13 (cont.) — Sound: **SFX via PS2 audsrv**
 
 jfaudiolib now has a working PCM output driver for the PS2 (`driver_audsrv.c`).
