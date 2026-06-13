@@ -89,6 +89,7 @@ copyrighted to 3D Realms and must be user-supplied at runtime.
 - [x] **Video** — **GS hardware present** (`ps2_gs.c`): the 8-bit frame goes up as a `PSMT8` texture + `CT32` CLUT and the GS does the palette-expand + 320×200→640×448 upscale. Locked ~60 fps.
 - [x] **Input** — DualShock via libpad → BUILD keys; menus *and* gameplay.
 - [x] **Playable** — boots end to end into levels and runs the 3D world at speed.
-- [ ] **Audio** — native audsrv driver for jfaudiolib (SFX), then MIDI music (replace `driver_nosound`).
+- [x] **Audio (SFX)** — MultiVoc → PS2 `audsrv` (`driver_audsrv.c`): a feed thread streams mixed divisions to `audsrv_play_audio`. Weapons/voice/explosions play.
+- [ ] **Music** — Duke's MIDI tracks need an OPL synth wired into jfaudiolib's MIDI subsystem.
 - [ ] **Analog sticks** — left stick move/strafe, right stick look (jfmact CONTROL axes).
 - [ ] **Polish** — `a-ee.s` rasterizer / SPRAM, save games, faster cdfs (skip the loose-file probe).

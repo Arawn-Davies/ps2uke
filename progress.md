@@ -1,5 +1,23 @@
 # Progress log
 
+## 2026-06-13 (cont.) — Sound: **SFX via PS2 audsrv**
+
+jfaudiolib now has a working PCM output driver for the PS2 (`driver_audsrv.c`).
+MultiVoc mixes 16-bit stereo into division buffers; a dedicated, higher-priority
+EE feed thread streams one division at a time to `audsrv_play_audio()`,
+self-pacing on `audsrv_wait_audio()` (ps2quake's `snd_ps2.c` model). The IOP audio
+modules come up via libps2_drivers' `init_audio_driver()` — and the ordering works
+out because cdfs has already applied the SBV patches by the time `SoundStartup()`
+runs. A semaphore serialises the mixer callback (on the feed thread) against the
+game thread's MultiVoc calls (`FX`/`MV_Lock`).
+
+Wired in by adding `ASS_AudSrv` to the driver enum + table; `FX_Init(AutoDetect)`
+picks it (the only PCM driver built). `SoundToggle=1` in the cfg. **Verified in
+PCSX2: weapons, Duke's one-liners, explosions, menu/pickup sounds all play.**
+
+Music is still silent — Duke's MIDI needs an OPL FM synth wired into jfaudiolib's
+MIDI subsystem; that's the remaining audio task.
+
 ## 2026-06-13 — GS hardware present (T8 + CLUT): **playable in-game at ~60 fps** (`2f9aebd`)
 
 The render path was the bottleneck, and it's gone. `showframe()` no longer makes

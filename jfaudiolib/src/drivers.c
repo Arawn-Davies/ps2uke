@@ -31,6 +31,10 @@
 
 #include "driver_nosound.h"
 
+#ifdef HAVE_AUDSRV
+# include "driver_audsrv.h"
+#endif
+
 #ifdef HAVE_SDL
 # include "driver_sdl.h"
 #endif
@@ -273,6 +277,25 @@ static struct {
         SDLDrv_CD_Pause,
         SDLDrv_CD_IsPlaying,
         SDLDrv_CD_SetVolume,
+        UNSUPPORTED_MIDI,
+    #else
+        UNSUPPORTED_COMPLETELY,
+    #endif
+    },
+
+    // PlayStation 2 audsrv (PCM / SFX)
+    {
+        "audsrv",
+    #ifdef HAVE_AUDSRV
+        AudSrvDrv_GetError,
+        AudSrvDrv_ErrorString,
+        AudSrvDrv_PCM_Init,
+        AudSrvDrv_PCM_Shutdown,
+        AudSrvDrv_PCM_BeginPlayback,
+        AudSrvDrv_PCM_StopPlayback,
+        AudSrvDrv_PCM_Lock,
+        AudSrvDrv_PCM_Unlock,
+        UNSUPPORTED_CD,
         UNSUPPORTED_MIDI,
     #else
         UNSUPPORTED_COMPLETELY,

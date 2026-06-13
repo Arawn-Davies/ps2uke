@@ -9,8 +9,9 @@ booted from an ISO in PCSX2 or on real hardware.
 > ART to the menu and **into levels at a vsync-capped 60 fps**. The engine's 8-bit
 > frame is handed to the GS as a **`PSMT8` texture + `CT32` CLUT**, so the Graphics
 > Synthesizer does the indexed→RGB palette-expand *and* the 320×200→640×448 upscale
-> **in hardware** — the EE just feeds it. DualShock input works (libpad). **Audio is
-> the remaining piece** (SFX/music — currently silent).
+> **in hardware** — the EE just feeds it. DualShock input works (libpad), and
+> **sound effects play** through the PS2 `audsrv` module. The last piece is
+> **music** (Duke's MIDI tracks need an OPL synth).
 
 ```mermaid
 graph LR

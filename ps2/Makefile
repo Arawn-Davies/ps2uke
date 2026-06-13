@@ -26,9 +26,9 @@ GAME_SRC = game actors config gamedef global grpscan menues osdcmds osdfuncs \
            player premap rts sector sounds version
 # Input/control + math helpers.
 MACT_SRC = animlib control file_lib keyboard mathutil mouse scriplib util_lib
-# Audio: silent (driver_nosound) for now; no vorbis/flac (HAVE_* off).
+# Audio: MultiVoc SFX out via PS2 audsrv (driver_audsrv); music/MIDI TODO (no OPL).
 AUD_SRC  = asssys cd drivers fx_man midi mix mixst multivoc music pitch \
-           driver_nosound
+           driver_nosound driver_audsrv
 # Our PS2 glue: cdfs/GRP file shim, build stubs, DualShock input, gsKit present.
 PLAT_SRC = ps2_fileio ps2_stubs ps2_pad ps2_gs
 
@@ -38,7 +38,7 @@ EE_OBJS = $(addprefix $(OBJDIR)/jfb_,  $(addsuffix .o,$(JFB_SRC)))  \
           $(addprefix $(OBJDIR)/aud_,  $(addsuffix .o,$(AUD_SRC)))  \
           $(addprefix $(OBJDIR)/plat_, $(addsuffix .o,$(PLAT_SRC)))
 
-EE_CFLAGS  += -std=gnu99 -D_EE -DUSE_POLYMOST=0 -DUSE_OPENGL=0 -fno-strict-aliasing
+EE_CFLAGS  += -std=gnu99 -D_EE -DUSE_POLYMOST=0 -DUSE_OPENGL=0 -fno-strict-aliasing -DHAVE_AUDSRV
 EE_INCS    += -I$(GAME) -I$(JFBINC) -I$(MACT) -I$(AUDINC) -I$(PLAT) \
               -I$(PS2SDK)/ports/include/SDL2 -I$(PS2SDK)/ports/include \
               -I$(GSKIT)/include
@@ -47,7 +47,7 @@ EE_LDFLAGS += -L$(PS2SDK)/ports/lib -L$(GSKIT)/lib
 # SDL2 (+ main = PS2 entry/IOP init) over gsKit; ps2_drivers loads cdfs.irx.
 EE_LIBS = -lSDL2main -lSDL2 -lps2_drivers \
           -lgskit -ldmakit -ldraw -lgraph -lmath3d -lpacket2 -ldma \
-          -ldebug -lfileXio -lpatches -lpad \
+          -ldebug -lfileXio -lpatches -lpad -laudsrv \
           -lm -lc -lkernel
 
 all: $(EE_BIN)
