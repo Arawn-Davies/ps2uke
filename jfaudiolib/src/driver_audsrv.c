@@ -8,8 +8,12 @@
  * init_audio_driver(), mirroring ps2quake's snd_ps2.c.
  *
  * A semaphore serialises the mixer callback (run on the feed thread) against the
- * game thread's MultiVoc calls -- that's what FX/MV_Lock()/Unlock() guard. MIDI
- * music is not handled here (needs an OPL synth); this driver is PCM/SFX only.
+ * game thread's MultiVoc calls -- that's what FX/MV_Lock()/Unlock() guard.
+ *
+ * Music: Duke's MIDI is rendered by the OPL (DBOPL) software synth and mixed in
+ * here, right before each division is pushed -- OPL_PS2_Render() pulls exactly
+ * one division's worth of stereo samples each loop, so the synth's clock paces
+ * to the same audsrv output it shares with the SFX (see ps2/opl/).
  */
 
 #if defined(_EE) || defined(__PS2__) || defined(PLATFORM_PS2)
@@ -20,6 +24,13 @@
 #include <ps2_audio_driver.h>
 
 #include "driver_audsrv.h"
+#include "ps2_opl.h"        /* OPL_PS2_Render (ps2/opl)        */
+#include "ps2_settings.h"   /* ps2_settings_music_gain() (boot picker) */
+
+/* OPL music is boosted before mixing: the DBOPL output sits well below full
+   scale, and the final clamp catches the rare loud peak. The boost amount is
+   the boot picker's "Music" setting (0 = off .. 3 = loud). */
+#define OPL_SCRATCH_FRAMES 1024            /* stereo frames per render block */
 
 enum {
     AudSrvErr_Warning = -2,
@@ -42,9 +53,51 @@ static void (*MixCallBack)(void) = NULL;
 static volatile int playing  = 0;
 static int  feed_tid  = -1;
 static int  mix_sema  = -1;
+static int  MixStereo = 1;             /* output is interleaved stereo?       */
 static char feed_stack[16 * 1024] __attribute__((aligned(16)));
 
 int AudSrvDrv_GetError(void) { return ErrorCode; }
+
+/* Render OPL music over a just-mixed division and add it in. `buf` is the
+   division about to be played (signed 16-bit; stereo interleaved when
+   MixStereo). Rendered in blocks so the scratch buffer stays small. */
+static void MixOplMusic(short *buf, int total_frames)
+{
+    static short opl[OPL_SCRATCH_FRAMES * 2];   /* stereo scratch */
+    int done = 0;
+    int gain = ps2_settings_music_gain();       /* 0 = music off */
+
+    if (gain <= 0)
+        return;                                 /* picker set Music = Off */
+
+    while (done < total_frames) {
+        int n = total_frames - done;
+        int i, v;
+        if (n > OPL_SCRATCH_FRAMES) n = OPL_SCRATCH_FRAMES;
+
+        OPL_PS2_Render(opl, n);                 /* interleaved L,R int16 */
+
+        if (MixStereo) {
+            short *dst = buf + done * 2;
+            for (i = 0; i < n * 2; ++i) {
+                v = dst[i] + opl[i] * gain;
+                if (v >  32767) v =  32767;
+                if (v < -32768) v = -32768;
+                dst[i] = (short) v;
+            }
+        } else {
+            short *dst = buf + done;            /* mono: downmix L+R */
+            for (i = 0; i < n; ++i) {
+                int m = (opl[2 * i] + opl[2 * i + 1]) >> 1;
+                v = dst[i] + m * gain;
+                if (v >  32767) v =  32767;
+                if (v < -32768) v = -32768;
+                dst[i] = (short) v;
+            }
+        }
+        done += n;
+    }
+}
 
 const char *AudSrvDrv_ErrorString(int ErrorNumber)
 {
@@ -67,6 +120,10 @@ static void FeedThread(void *arg)
     while (playing) {
         audsrv_wait_audio(MixBufferSize);
         WaitSema(mix_sema);
+        /* Add the OPL music onto the SFX mix for this division, then push it.
+           Frames = bytes / (2 bytes * channels). */
+        MixOplMusic((short *)(MixBuffer + MixBufferCurrent * MixBufferSize),
+                    MixBufferSize / (MixStereo ? 4 : 2));
         audsrv_play_audio(MixBuffer + MixBufferCurrent * MixBufferSize, MixBufferSize);
         if (++MixBufferCurrent >= MixBufferCount) MixBufferCurrent = 0;
         if (MixCallBack) MixCallBack();        /* mix the next division */
@@ -99,6 +156,7 @@ int AudSrvDrv_PCM_Init(int *mixrate, int *numchannels, int *samplebits, void *in
 
     *samplebits  = 16;
     *numchannels = fmt.channels;
+    MixStereo    = (fmt.channels >= 2);
     /* *mixrate is honoured as requested */
 
     Initialised = 1;

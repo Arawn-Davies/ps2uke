@@ -34,6 +34,12 @@ Modifications for JonoF's port by Jonathon Fowler (jf@jonof.id.au)
 #include "winlayer.h"
 #endif
 
+#if defined(_EE)
+// On PS2 the MIDI music goes straight to the OPL (FM-synth) player, bypassing
+// jfaudiolib's MUSIC_*/MIDI sequencer (see ps2/opl/). SFX still go via MultiVoc.
+#include "ps2_opl.h"
+#endif
+
 #define LOUDESTVOLUME 150
 
 #define MUSIC_ID  -65536
@@ -137,7 +143,15 @@ void MusicStartup( void )
    } else {
       musicdevicetype = MusicDevice - 1;
    }
-   
+
+#if defined(_EE)
+   // OPL synth, rendered at the audsrv mix rate, mixed in the SFX feed thread.
+   (void)musicdevicetype;
+   PS2OPL_Init( MixRate );
+   PS2OPL_SetVolume( MusicVolume );
+   return;
+#endif
+
    status = MUSIC_Init( musicdevicetype, MusicParams );
 
    if ( status == MUSIC_Ok )
@@ -175,9 +189,14 @@ void MusicShutdown( void )
    // if they chose None lets return
    if (MusicDevice < 0)
       return;
-   
+
    stopmusic();
-   
+
+#if defined(_EE)
+   PS2OPL_Shutdown();
+   return;
+#endif
+
    status = MUSIC_Shutdown();
    if ( status != MUSIC_Ok )
       {
@@ -195,13 +214,21 @@ void MusicPause( int onf )
       if (MusicIsWaveform) {
          FX_PauseSound(MusicVoice, TRUE);
       } else {
+#if defined(_EE)
+         PS2OPL_Pause(1);
+#else
          MUSIC_Pause();
+#endif
       }
    } else {
       if (MusicIsWaveform) {
          FX_PauseSound(MusicVoice, FALSE);
       } else {
+#if defined(_EE)
+         PS2OPL_Pause(0);
+#else
          MUSIC_Continue();
+#endif
       }
    }
    
@@ -213,7 +240,11 @@ void MusicSetVolume(int volume)
    if (MusicIsWaveform && MusicVoice >= 0) {
       //FX_SetVoiceVolume(MusicVoice, volume);
    } else if (!MusicIsWaveform) {
+#if defined(_EE)
+      PS2OPL_SetVolume(volume);
+#else
       MUSIC_SetVolume(volume);
+#endif
    }
 }
 
@@ -298,7 +329,11 @@ void playmusic(char *fn)
     kclose( fp );
     
     if (!memcmp(MusicPtr, "MThd", 4)) {
+#if defined(_EE)
+       PS2OPL_PlaySong( MusicPtr, MusicLen, 1 );
+#else
        MUSIC_PlaySong( MusicPtr, MusicLen, MUSIC_LoopSong );
+#endif
        MusicIsWaveform = 0;
     } else {
        MusicVoice = FX_PlayLoopedAuto(MusicPtr, MusicLen, 0, 0, 0,
@@ -316,7 +351,11 @@ void stopmusic(void)
        FX_StopSound(MusicVoice);
        MusicVoice = -1;
     } else if (!MusicIsWaveform) {
+#if defined(_EE)
+       PS2OPL_StopSong();
+#else
        MUSIC_StopSong();
+#endif
     }
 
     MusicPaused = 0;

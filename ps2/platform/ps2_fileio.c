@@ -27,6 +27,21 @@ static int is_disc_path(const char *p)
     return (strncmp(p, "cdfs", 4) == 0) || (strncmp(p, "cdrom", 5) == 0);
 }
 
+/* Our boot disc carries exactly two loose files -- DUKE3D.GRP and DUKE3D.CFG;
+   every other asset (ART, sounds, maps, MIDI, demos) lives *inside* the GRP.
+   jfbuild's kopen4load still tries each name as a loose file first, and a miss
+   makes cdfs scan the whole disc and emit ~30 "Bad Sector Count Error" lines
+   (~0.15s) before kopen4load falls back to the GRP. Since we know those loose
+   probes can only ever hit the .grp/.cfg, fail everything else instantly so the
+   GRP fallback is immediate -- no disc scan, no error spam, much faster loads. */
+static int loose_file_allowed(const char *path)
+{
+    const char *dot = strrchr(path, '.');
+    if (dot == NULL)
+        return 0;
+    return strcasecmp(dot, ".grp") == 0 || strcasecmp(dot, ".cfg") == 0;
+}
+
 static void ensure_cdfs(void)
 {
     static int inited = 0;
@@ -65,6 +80,9 @@ int ps2_bopen(const char *path, int flags, ...)
         if (is_disc_path(p))
         {
             int fd;
+            /* Skip the costly cdfs probe for in-GRP assets (see above). */
+            if (!loose_file_allowed(p))
+                return -1;
             ensure_cdfs();
             fd = fioOpen(p, FIO_O_RDONLY);
             return (fd < 0) ? -1 : (fd | PS2_FIO_TAG);

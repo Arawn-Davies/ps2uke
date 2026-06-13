@@ -15,6 +15,7 @@ MACT   = ../jfmact
 AUD    = ../jfaudiolib/src
 AUDINC = ../jfaudiolib/include
 PLAT   = platform
+OPL    = opl
 OBJDIR = build
 
 # jfbuild engine (software-only) + SDL2 layer.
@@ -26,20 +27,29 @@ GAME_SRC = game actors config gamedef global grpscan menues osdcmds osdfuncs \
            player premap rts sector sounds version
 # Input/control + math helpers.
 MACT_SRC = animlib control file_lib keyboard mathutil mouse scriplib util_lib
-# Audio: MultiVoc SFX out via PS2 audsrv (driver_audsrv); music/MIDI TODO (no OPL).
+# Audio: MultiVoc SFX out via PS2 audsrv (driver_audsrv). Music is the OPL synth
+# (OPL_SRC below), mixed into the audsrv feed thread -- jfaudiolib's MIDI path is
+# bypassed, so its midi/music TUs stay but their driver is unused on PS2.
 AUD_SRC  = asssys cd drivers fx_man midi mix mixst multivoc music pitch \
            driver_nosound driver_audsrv
-# Our PS2 glue: cdfs/GRP file shim, build stubs, DualShock input, gsKit present.
-PLAT_SRC = ps2_fileio ps2_stubs ps2_pad ps2_gs
+# OPL FM-synth music (lifted from ps2oom): DBOPL core + MIDI->OPL sequencer,
+# rendered on demand by the audsrv feed thread. See ps2/opl/.
+OPL_SRC  = dbopl opl_queue opl opl_ps2 midifile memio mus2mid i_oplmusic \
+           demo_genmidi
+# Our PS2 glue: cdfs/GRP file shim, build stubs, DualShock input, gsKit present,
+# shared options (argv/memory card) and the quit->launcher reboot. The options
+# *picker* lives in the separate launcher ELF (ps2/launcher/), not here.
+PLAT_SRC = ps2_fileio ps2_stubs ps2_pad ps2_gs ps2_settings ps2_reboot
 
 EE_OBJS = $(addprefix $(OBJDIR)/jfb_,  $(addsuffix .o,$(JFB_SRC)))  \
           $(addprefix $(OBJDIR)/game_, $(addsuffix .o,$(GAME_SRC))) \
           $(addprefix $(OBJDIR)/mact_, $(addsuffix .o,$(MACT_SRC))) \
           $(addprefix $(OBJDIR)/aud_,  $(addsuffix .o,$(AUD_SRC)))  \
+          $(addprefix $(OBJDIR)/opl_,  $(addsuffix .o,$(OPL_SRC)))  \
           $(addprefix $(OBJDIR)/plat_, $(addsuffix .o,$(PLAT_SRC)))
 
 EE_CFLAGS  += -std=gnu99 -D_EE -DUSE_POLYMOST=0 -DUSE_OPENGL=0 -fno-strict-aliasing -DHAVE_AUDSRV
-EE_INCS    += -I$(GAME) -I$(JFBINC) -I$(MACT) -I$(AUDINC) -I$(PLAT) \
+EE_INCS    += -I$(GAME) -I$(JFBINC) -I$(MACT) -I$(AUDINC) -I$(PLAT) -I$(OPL) \
               -I$(PS2SDK)/ports/include/SDL2 -I$(PS2SDK)/ports/include \
               -I$(GSKIT)/include
 EE_LDFLAGS += -L$(PS2SDK)/ports/lib -L$(GSKIT)/lib
@@ -47,7 +57,7 @@ EE_LDFLAGS += -L$(PS2SDK)/ports/lib -L$(GSKIT)/lib
 # SDL2 (+ main = PS2 entry/IOP init) over gsKit; ps2_drivers loads cdfs.irx.
 EE_LIBS = -lSDL2main -lSDL2 -lps2_drivers \
           -lgskit -ldmakit -ldraw -lgraph -lmath3d -lpacket2 -ldma \
-          -ldebug -lfileXio -lpatches -lpad -laudsrv \
+          -ldebug -lfileXio -lpatches -lpad -laudsrv -lmc \
           -lm -lc -lkernel
 
 all: $(EE_BIN)
@@ -72,6 +82,8 @@ $(OBJDIR)/game_%.o: $(GAME)/%.c | $(OBJDIR)
 $(OBJDIR)/mact_%.o: $(MACT)/%.c | $(OBJDIR)
 	$(EE_C_COMPILE) -c $< -o $@
 $(OBJDIR)/aud_%.o:  $(AUD)/%.c  | $(OBJDIR)
+	$(EE_C_COMPILE) -c $< -o $@
+$(OBJDIR)/opl_%.o:  $(OPL)/%.c  | $(OBJDIR)
 	$(EE_C_COMPILE) -c $< -o $@
 $(OBJDIR)/plat_%.o: $(PLAT)/%.c | $(OBJDIR)
 	$(EE_C_COMPILE) -c $< -o $@

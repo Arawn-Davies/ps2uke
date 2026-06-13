@@ -2090,6 +2090,16 @@ void gameexit(const char *t)
 
     GOTOHERE:
 
+#if defined(_EE)
+    // No host/DOS to return to on a console, and the full EE/IOP teardown
+    // (audsrv + cdfs) deadlocks here -- it spins the IOP on torn-down modules
+    // ("callnull" spam). Following ps2quake's Sys_Quit: skip Shutdown()/exit()
+    // entirely and terminate straight to the loader via the Exit syscall (0x04),
+    // which resets the IOP cleanly. (Normal menu "Quit" never reaches here -- it
+    // backs out to Duke's menu; this is only the fatal-error path.)
+    __asm__ __volatile__("li $3, 0x04; syscall; nop;");
+#endif
+
     Shutdown();
 
     if(*t != 0)

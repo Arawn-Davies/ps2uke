@@ -25,7 +25,8 @@ GRPDIR="${1:-/mnt/c/Users/azama/Downloads/duke3d}"
 STAGE="$ROOT/dist/iso"
 OUT="$ROOT/dist/ps2uke.iso"
 
-[ -f "$ROOT/ps2/ps2uke.elf" ] || { echo "!! ps2/ps2uke.elf missing -- run ./build.sh first"; exit 1; }
+[ -f "$ROOT/ps2/ps2uke.elf" ]            || { echo "!! ps2/ps2uke.elf missing -- run ./build.sh first"; exit 1; }
+[ -f "$ROOT/ps2/launcher/launcher.elf" ] || { echo "!! ps2/launcher/launcher.elf missing -- run ./build.sh first"; exit 1; }
 
 grp="$(find "$GRPDIR" -maxdepth 1 -iname 'duke3d.grp' | head -1 || true)"
 [ -n "$grp" ] || { echo "!! DUKE3D.GRP not found in $GRPDIR"; exit 1; }
@@ -33,10 +34,11 @@ grp="$(find "$GRPDIR" -maxdepth 1 -iname 'duke3d.grp' | head -1 || true)"
 echo ">> staging ISO tree in $STAGE"
 rm -rf "$STAGE"
 mkdir -p "$STAGE"
-cp "$ROOT/ps2/SYSTEM.CNF"   "$STAGE/SYSTEM.CNF"
-cp "$ROOT/ps2/ps2uke.elf"   "$STAGE/PS2UKE.ELF"
-cp "$grp"                   "$STAGE/DUKE3D.GRP"
-cp "$ROOT/ps2/duke3d.cfg"   "$STAGE/DUKE3D.CFG"   # ship a 320x200 config
+cp "$ROOT/ps2/SYSTEM.CNF"          "$STAGE/SYSTEM.CNF"   # boots LAUNCH.ELF first
+cp "$ROOT/ps2/launcher/launcher.elf" "$STAGE/LAUNCH.ELF" # options picker
+cp "$ROOT/ps2/ps2uke.elf"          "$STAGE/PS2UKE.ELF"   # the game
+cp "$grp"                          "$STAGE/DUKE3D.GRP"
+cp "$ROOT/ps2/duke3d.cfg"          "$STAGE/DUKE3D.CFG"   # ship a 320x200 config
 
 echo ">> building $OUT  (GRP: $grp)"
 mkdir -p "$ROOT/dist"

@@ -22,6 +22,10 @@ static char padbuf[256] __attribute__((aligned(64)));
 static int  inited = 0;        /* modules loaded + port opened */
 static int  analog_locked = 0; /* DualShock (analog) mode requested once stable */
 
+/* Last analog stick reading (0..255, 0x80 = centred), refreshed by ps2pad_btns().
+   Default to centred so a digital pad / not-yet-ready state reads as no input. */
+static unsigned char stick_lh = 0x80, stick_lv = 0x80, stick_rh = 0x80, stick_rv = 0x80;
+
 void ps2pad_init(void)
 {
     if (inited)
@@ -69,7 +73,21 @@ unsigned ps2pad_btns(void)
     if (padRead(0, 0, &btn) == 0)
         return 0;
 
+    /* Stash the analog sticks (valid in DualShock mode; 0x80 when digital). */
+    stick_lh = btn.ljoy_h; stick_lv = btn.ljoy_v;
+    stick_rh = btn.rjoy_h; stick_rv = btn.rjoy_v;
+
     return ((unsigned) ~btn.btns) & 0xffff;   /* active-low -> active-high */
+}
+
+/* Latest analog stick positions (0..255, 0x80 = centred). Call ps2pad_btns()
+   first each frame to refresh them. */
+void ps2pad_sticks(int *lh, int *lv, int *rh, int *rv)
+{
+    if (lh) *lh = stick_lh;
+    if (lv) *lv = stick_lv;
+    if (rh) *rh = stick_rh;
+    if (rv) *rv = stick_rv;
 }
 
 #endif /* PS2 */

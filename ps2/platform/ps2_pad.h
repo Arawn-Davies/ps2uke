@@ -10,6 +10,7 @@
 
 void     ps2pad_init(void);
 unsigned ps2pad_btns(void);   /* active-high (bit set == pressed); 0 if not ready */
+void     ps2pad_sticks(int *lh, int *lv, int *rh, int *rv);  /* 0..255, 0x80=centre */
 
 #endif /* PS2 */
 

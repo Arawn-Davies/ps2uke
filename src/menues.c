@@ -3610,6 +3610,13 @@ VOLUME_ALL_40x:
             {
                 KB_FlushKeyboardQueue();
 
+#if defined(_EE)
+                // No "DOS" to exit to on a console: re-launch our ELF, which
+                // drops back to the boot-time options picker (ps2quake model).
+                // This also sidesteps gameexit()'s Shutdown()+exit(0) hang, as
+                // the IOP is reset cleanly on the way out. Does not return.
+                { extern void ps2_reboot(void); ps2_reboot(); }
+#else
                 if( gamequit == 0 && ( numplayers > 1 ) )
                 {
                     if(ps[myconnectindex].gm&MODE_GAME)
@@ -3628,6 +3635,7 @@ VOLUME_ALL_40x:
 
                 if( ( totalclock > quittimer ) && ( gamequit == 1) )
                     gameexit("Timed out.");
+#endif
             }
 
             x = probe(186,124,0,0);

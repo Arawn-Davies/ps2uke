@@ -257,6 +257,15 @@ int main(int argc, char *argv[])
 
 	buildkeytranslationtable();
 
+#if defined(_EE)
+	// PS2 options come from the boot launcher (LAUNCH.ELF), handed to us in
+	// argv as a "ps2uke=..." tag. Apply them before SDL_Init(VIDEO) so the
+	// chosen video standard is in place when ps2_gs.c brings up the GS. Duke's
+	// checkcommandline() ignores the tag (it isn't a '-' option).
+	{ extern void ps2_settings_apply_argv(int, char **);
+	  ps2_settings_apply_argv(argc, argv); }
+#endif
+
 	// SDL must be initialised before GTK or else crashing will ensue.
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER)) {
 		buildprintf("Early initialisation of SDL failed! (%s)\n", SDL_GetError());
@@ -480,6 +489,17 @@ int initinput(void)
 			}
 		}
 	}
+
+#if defined(_EE)
+	// SDL's PS2 port has no joystick/gamecontroller backend, so the block above
+	// never finds one. We read the DualShock directly (ps2_pad.c) and feed its
+	// sticks into joyaxis[] each frame (see ps2_pad_inject). Advertise a 4-axis
+	// pad here so jfmact's CONTROL_StartJoy() (== inputdevices&4) reports a
+	// joystick present and the engine applies the analog axes.
+	inputdevices |= 4;
+	joynumaxes    = 4;
+	joynumbuttons = 16;
+#endif
 
 	return 0;
 }
@@ -1319,6 +1339,21 @@ static void ps2_pad_inject(void)
 		keyfifo[keyfifoend] = sc;
 		keyfifo[(keyfifoend+1)&(KEYFIFOSIZ-1)] = want[sc] ? 1 : 0;
 		keyfifoend = ((keyfifoend+2)&(KEYFIFOSIZ-1));
+	}
+
+	// Analog sticks -> jfbuild joyaxis[] (the same array SDL's controller axis
+	// events fill on desktop), in SDL's signed ~+/-32767 range. jfmact applies
+	// its deadzone/saturate and the duke3d.cfg axis map (left = strafe/move,
+	// right = turn/look). Centre 0x80; stick-up is the low end -> negative, the
+	// SDL convention (negative move = forward, negative look = up).
+	{
+		extern void ps2pad_sticks(int *, int *, int *, int *);
+		int lh, lv, rh, rv;
+		ps2pad_sticks(&lh, &lv, &rh, &rv);
+		joyaxis[0] = (lh - 0x80) * 256;   // left  X -> strafe
+		joyaxis[1] = (lv - 0x80) * 256;   // left  Y -> move
+		joyaxis[2] = (rh - 0x80) * 256;   // right X -> turn
+		joyaxis[3] = (rv - 0x80) * 256;   // right Y -> look
 	}
 }
 #endif

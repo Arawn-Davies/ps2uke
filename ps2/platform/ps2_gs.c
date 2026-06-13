@@ -20,27 +20,49 @@
 #include <gsKit.h>
 #include <dmaKit.h>
 
+#include "ps2_settings.h"   /* ps2cfg: video standard / filter / frame cap */
+
 /* jfbuild's faded palette is palette_t curpalettefaded[256] = { r, g, b, f }. */
 extern unsigned char curpalettefaded[256][4];
 
 static GSGLOBAL *gsGlobal = NULL;
 static GSTEXTURE fbtex;
 static int       fb_w = 0, fb_h = 0;
+static int       fb_double = 1;        /* is the framebuffer double-buffered? */
 
 void ps2gs_init(int w, int h)
 {
     if (gsGlobal) return;                  /* once */
 
     gsGlobal = gsKit_init_global();
-    gsGlobal->Mode            = GS_MODE_NTSC;
-    gsGlobal->Interlace       = GS_INTERLACED;
-    gsGlobal->Field           = GS_FIELD;
-    gsGlobal->Width           = 640;
-    gsGlobal->Height          = 448;
-    gsGlobal->PSM             = GS_PSM_CT24;
+
+    /* Video mode from the boot picker, in PS2_VIDEO_* order. The GS has only
+       4 MB of VRAM; a double-buffered CT24 framebuffer is fine up to 576p
+       (640x512x4x2 ~= 2.6 MB), but 720p must drop to 16-bit to fit alongside
+       our T8 texture. Progressive (480p/576p/720p) needs component/VGA output
+       on real hardware; interlaced (480i/576i) works over composite. */
+    static const struct {
+        int mode, interlace, field, width, height, psm, dbuf;
+    } modes[PS2_VIDEO_COUNT] = {
+        { GS_MODE_NTSC,      GS_INTERLACED,    GS_FIELD,  640,  448, GS_PSM_CT24, GS_SETTING_ON },
+        { GS_MODE_DTV_480P,  GS_NONINTERLACED, GS_FRAME,  640,  480, GS_PSM_CT24, GS_SETTING_ON },
+        { GS_MODE_PAL,       GS_INTERLACED,    GS_FIELD,  640,  512, GS_PSM_CT24, GS_SETTING_ON },
+        { GS_MODE_DTV_576P,  GS_NONINTERLACED, GS_FRAME,  640,  512, GS_PSM_CT24, GS_SETTING_ON },
+        { GS_MODE_DTV_720P,  GS_NONINTERLACED, GS_FRAME, 1280,  720, GS_PSM_CT16, GS_SETTING_ON },
+    };
+    int v = ps2cfg.video;
+    if (v < 0 || v >= PS2_VIDEO_COUNT) v = PS2_VIDEO_NTSC_480I;
+
+    gsGlobal->Mode            = modes[v].mode;
+    gsGlobal->Interlace       = modes[v].interlace;
+    gsGlobal->Field           = modes[v].field;
+    gsGlobal->Width           = modes[v].width;
+    gsGlobal->Height          = modes[v].height;
+    gsGlobal->PSM             = modes[v].psm;
     gsGlobal->PSMZ            = GS_PSMZ_16S;
     gsGlobal->ZBuffering      = GS_SETTING_OFF;
-    gsGlobal->DoubleBuffering = GS_SETTING_ON;
+    gsGlobal->DoubleBuffering = modes[v].dbuf;
+    fb_double                 = (modes[v].dbuf == GS_SETTING_ON);
 
     dmaKit_init(D_CTRL_RELE_OFF, D_CTRL_MFD_OFF, D_CTRL_STS_UNSPEC,
                 D_CTRL_STD_OFF, D_CTRL_RCYC_8, 1 << DMA_CHANNEL_GIF);
@@ -54,7 +76,8 @@ void ps2gs_init(int w, int h)
     fbtex.Height   = h;
     fbtex.PSM      = GS_PSM_T8;
     fbtex.ClutPSM  = GS_PSM_CT32;
-    fbtex.Filter   = GS_FILTER_NEAREST;
+    fbtex.Filter   = (ps2cfg.filter == PS2_FILTER_SMOOTH)
+                   ? GS_FILTER_LINEAR : GS_FILTER_NEAREST;
     fbtex.Delayed  = 0;
     fbtex.Vram     = 0;
     fbtex.VramClut = 0;
@@ -104,7 +127,12 @@ void ps2gs_present(const void *frame8, int pitch)
         (float) fbtex.Width, (float) fbtex.Height,            /* u2, v2 */
         0, GS_SETREG_RGBAQ(0x80, 0x80, 0x80, 0x80, 0x00));
     gsKit_queue_exec(gsGlobal);
-    gsKit_sync_flip(gsGlobal);
+    if (fb_double)
+        gsKit_sync_flip(gsGlobal);      /* vsync + flip between the two buffers */
+    else
+        gsKit_vsync_wait();             /* single buffer (1080i): just pace, no flip */
+    if (ps2cfg.cap == PS2_CAP_30)
+        gsKit_vsync_wait();             /* one more field -> ~30 fps cap */
     gsKit_TexManager_nextFrame(gsGlobal);
 }
 

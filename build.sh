@@ -31,5 +31,17 @@ if [[ "${1:-}" == "shell" ]]; then
   exec docker run -it "${common[@]}" "${IMAGE}" /bin/bash
 fi
 
-# Everything else is passed straight to make (default target = duke3d.elf).
-exec docker run "${common[@]}" "${IMAGE}" make "$@"
+# Build both the game ELF (ps2/) and the boot launcher (ps2/launcher/). The
+# launcher is a separate ELF that SYSTEM.CNF boots first; it shows the options
+# picker and chain-loads the game.
+case "${1:-}" in
+  clean)
+    exec docker run "${common[@]}" "${IMAGE}" \
+        sh -c 'make clean; make -C launcher clean' ;;
+  "")
+    exec docker run "${common[@]}" "${IMAGE}" \
+        sh -c 'make && make -C launcher' ;;
+  *)
+    # Explicit make args (e.g. SHAREWARE=1) target the game build only.
+    exec docker run "${common[@]}" "${IMAGE}" make "$@" ;;
+esac
